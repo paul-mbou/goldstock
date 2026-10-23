@@ -16,9 +16,9 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type SubmitEvent } from 'react';
 import {
+  PLAN_LIMITS,
   ROLES,
   ROLE_IDS,
-  PLAN_LIMITS,
   SHOPS,
   TODAY_START,
   formatAgo,
@@ -135,7 +135,7 @@ function Team() {
           {visible.length === 0 ? (
             <EmptyState icon={SearchX} title="Aucun membre ne correspond" />
           ) : (
-            <ul className="divide-y divide-line">
+            <ul className="@container divide-y divide-line">
               {visible.map((member) => (
                 <MemberRow
                   key={member.id}
@@ -292,33 +292,35 @@ function MemberRow({
 
   return (
     <li
-      className={`flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 sm:flex-nowrap sm:px-5 ${member.status === 'suspended' ? 'opacity-60' : ''}`}
+      className={`flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-4 @md:flex-nowrap @md:px-5 ${member.status === 'suspended' ? 'opacity-60' : ''}`}
     >
       <Avatar name={member.name} />
-      <div className="min-w-0 flex-1">
-        <p className="flex flex-wrap items-center gap-2 font-semibold text-ink">
-          {member.name}
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <p className="flex min-w-0 items-center gap-2 leading-snug font-semibold text-ink">
+          <span className="truncate">{member.name}</span>
           {isMe && <Badge tone="warning">Vous</Badge>}
         </p>
-        <p className="truncate text-sm text-ink-mute">
+        <p className="truncate text-sm leading-snug text-ink-mute">
           {member.shop === 'Toutes' ? 'Toutes les boutiques' : member.shop} · {member.phone}
         </p>
       </div>
-      <div className="hidden w-36 text-sm md:block">
-        <p className="font-semibold text-ink">{roleLabel}</p>
-        <p className="text-ink-mute">{member.lastSeen ? `Actif ${formatAgo(member.lastSeen)}` : 'Jamais connecté'}</p>
+      <div className="hidden w-36 shrink-0 space-y-0.5 text-sm @2xl:block">
+        <p className="leading-snug font-semibold text-ink">{roleLabel}</p>
+        <p className="truncate leading-snug text-ink-mute">
+          {member.lastSeen ? `Actif ${formatAgo(member.lastSeen)}` : 'Jamais connecté'}
+        </p>
       </div>
-      <div className="hidden w-24 text-right text-sm lg:block">
-        <p className="font-semibold text-ink tabular-nums">{sales ?? '—'}</p>
-        <p className="text-ink-mute">ventes auj.</p>
+      <div className="hidden w-24 shrink-0 space-y-0.5 text-right text-sm @3xl:block">
+        <p className="leading-snug font-semibold text-ink tabular-nums">{sales ?? '—'}</p>
+        <p className="leading-snug text-ink-mute">ventes auj.</p>
       </div>
-      <div className="flex items-center gap-2 sm:w-48 sm:justify-end">
-        <span className="md:hidden">
+      <div className="flex w-full items-center gap-2 pl-14 @md:w-auto @md:shrink-0 @md:justify-end @md:pl-0 @2xl:w-48">
+        <span className="@2xl:hidden">
           <Badge tone="navy">{roleLabel}</Badge>
         </span>
         <StatusBadge kind="member" status={member.status} />
         {editable && (
-          <div ref={ref} className="relative">
+          <div ref={ref} className="relative ml-auto @md:ml-0">
             <button
               type="button"
               aria-expanded={open}

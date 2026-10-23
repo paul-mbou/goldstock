@@ -1,0 +1,54 @@
+---
+import { Plus } from 'lucide-react';
+import { faqs, whatsappUrl } from '../../data/site';
+import { WhatsAppIcon } from '../brand/WhatsAppIcon';
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map(({ q, a }) => ({
+    '@type': 'Question',
+    name: q,
+    acceptedAnswer: { '@type': 'Answer', text: a },
+  })),
+};
+---
+
+<section id="faq" aria-labelledby="faq-title" class="bg-white py-20 lg:py-28">
+  <div class="container-page grid gap-12 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-20">
+    <div data-reveal-stagger class="lg:sticky lg:top-28 lg:self-start">
+      <p class="eyebrow">FAQ</p>
+      <h2
+        id="faq-title"
+        class="mt-4 text-3xl leading-tight font-extrabold tracking-[-0.02em] text-balance text-navy-950 sm:text-4xl"
+      >
+        Vos questions, nos réponses
+      </h2>
+      <p class="mt-4 text-lg text-navy-500">
+        Vous ne trouvez pas votre réponse&nbsp;? Notre équipe vous répond sur WhatsApp, 7j/7.
+      </p>
+      <a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" class="btn-navy mt-7">
+        <WhatsAppIcon className="size-5 text-emerald-400" />
+        Écrire sur WhatsApp
+      </a>
+    </div>
+
+    <div
+      data-reveal-stagger
+      class="divide-y divide-navy-100 border-y border-navy-100 [--reveal-delay:150ms] [--reveal-step:70ms]"
+    >
+      {faqs.map(({ q, a }, index) => (
+        <details class="group" name="faq" open={index === 0}>
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-6 py-5 text-left text-lg font-semibold text-navy-900 transition hover:text-gold-700 [&::-webkit-details-marker]:hidden">
+            {q}
+            <span class="grid size-8 shrink-0 place-items-center rounded-full bg-navy-50 text-navy-700 transition-transform duration-300 group-open:rotate-45 group-open:bg-gold-100 group-open:text-gold-700">
+              <Plus className="size-4" aria-hidden="true" />
+            </span>
+          </summary>
+          <p class="max-w-2xl pb-6 leading-relaxed text-navy-500">{a}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(faqSchema)} />
+</section>

@@ -1,0 +1,111 @@
+---
+import { Picture } from 'astro:assets';
+import { ArrowRight, Check } from 'lucide-react';
+import phoneRender from '../../assets/hero/iphone-app.png';
+import tabletRender from '../../assets/hero/tablet-dashboard.png';
+import { heroChecks, site, whatsappUrl } from '../../data/site';
+import VideoDialog from '../VideoDialog';
+---
+
+<section aria-labelledby="hero-title" class="relative isolate overflow-hidden bg-navy-950 text-white">
+  <div class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
+    <div class="absolute inset-0 bg-[radial-gradient(60rem_40rem_at_75%_20%,rgb(37_99_235/0.16),transparent_60%),radial-gradient(40rem_30rem_at_10%_0%,rgb(244_181_44/0.10),transparent_60%)]"></div>
+    <div class="absolute inset-0 bg-[linear-gradient(rgb(255_255_255/0.035)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.035)_1px,transparent_1px)] mask-[radial-gradient(ellipse_at_center,black,transparent_75%)] bg-size-[64px_64px]"></div>
+    <svg
+      class="absolute inset-x-0 bottom-0 h-48 w-full text-navy-900"
+      viewBox="0 0 1440 200"
+      preserveAspectRatio="none"
+    >
+      <path
+        fill="currentColor"
+        d="M0 200V150h40v-30h30v40h25V110h35v50h20v-70h40v70h30v-40h25v-30h30v70h40V90h20v-20h30v90h35v-50h25v50h40v-80h30v80h20v-40h35v-30h25v70h30V100h40v60h25v-35h30v35h35V80h25v80h30v-50h40v50h20v-70h30v70h35v-40h25v40h40V95h30v65h25v-30h35v30h20V70h40v90h30v-55h25v55h35v-40h30v40h25V85h35v75h30v-45h20v45h40v-60h25v60h35v-30h30v30h25V90h40v70h20V200Z"
+        opacity="0.9"
+      ></path>
+      <path
+        d="M760 150 L860 135 L940 140 L1020 110 L1090 118 L1160 80 L1230 88 L1300 50 L1440 20"
+        fill="none"
+        stroke="#f4b52c"
+        stroke-width="2"
+        opacity="0.55"
+      ></path>
+    </svg>
+  </div>
+
+  <div class="container-page grid items-center gap-14 pt-12 pb-20 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-10 lg:pt-16 lg:pb-24">
+    <div class="max-w-2xl">
+      <p class="inline-flex animate-fade-up flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-white/12 bg-white/5 px-4 py-2 text-xs font-medium text-white/80 sm:text-[0.8125rem]">
+        <span
+          class="size-2 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgb(52_211_153/0.2)]"
+          aria-hidden="true"
+        ></span>
+        Gestion de stock et de ventes
+        <span class="hidden text-white/30 sm:inline" aria-hidden="true">
+          •
+        </span>
+        <span class="text-white/65">Pour les boutiques et commerces camerounais</span>
+      </p>
+
+      <h1
+        id="hero-title"
+        class="mt-7 animate-fade-up text-[2.5rem] leading-[1.08] font-extrabold tracking-[-0.03em] text-balance [animation-delay:80ms] sm:text-5xl xl:text-[3.6rem]"
+      >
+        Gérez votre boutique, contrôlez vos stocks et suivez{' '}
+        <span class="text-gold-400">chaque franc de vos ventes</span>.
+      </h1>
+
+      <p class="mt-6 max-w-xl animate-fade-up text-base leading-relaxed text-white/75 [animation-delay:160ms] sm:text-lg">
+        GOLDSTOCK centralise vos produits, vos ventes, vos stocks, vos employés et les versements de vos gérants. Gardez
+        le contrôle de votre commerce depuis votre téléphone, où que vous soyez.
+      </p>
+
+      <div class="mt-9 flex animate-fade-up flex-col gap-3 [animation-delay:240ms] sm:flex-row sm:items-center sm:gap-4">
+        <a href={site.signupUrl} class="btn-gold group h-14 px-7 text-base">
+          Essayer gratuitement 7 jours
+          <ArrowRight className="size-5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+        </a>
+        <VideoDialog
+          client:idle
+          videoUrl={site.demoVideoUrl || undefined}
+          whatsappUrl={whatsappUrl('Bonjour, je souhaite une démo de GOLDSTOCK.')}
+        />
+      </div>
+
+      <ul class="mt-8 flex animate-fade-up flex-wrap gap-x-6 gap-y-2 text-sm text-white/75 [animation-delay:320ms]">
+        {heroChecks.map((item) => (
+          <li class="flex items-center gap-2">
+            <Check className="size-4 text-emerald-400" strokeWidth={3} aria-hidden="true" />
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <div class="relative mx-auto w-full max-w-[40rem] animate-fade-up pt-2.5 pb-11 [animation-delay:220ms]">
+      <div
+        class="absolute inset-[12%_6%_18%] -z-10 rounded-full bg-[radial-gradient(closest-side,rgb(59_91_219/0.35),transparent)] blur-2xl"
+        aria-hidden="true"
+      ></div>
+      <Picture
+        src={tabletRender}
+        alt="Tableau de bord GOLDSTOCK sur tablette : ventes, encaissements et stock en FCFA"
+        formats={['avif']}
+        fallbackFormat="webp"
+        widths={[480, 720, 960, 1280, tabletRender.width]}
+        sizes="(min-width: 1024px) 40rem, 92vw"
+        loading="eager"
+        fetchpriority="high"
+        class="block h-auto w-full drop-shadow-[0_34px_64px_rgb(2_8_20/0.55)]"
+      />
+      <Picture
+        src={phoneRender}
+        alt="Application mobile GOLDSTOCK sur iPhone : ventes du jour et ventes récentes"
+        formats={['avif']}
+        fallbackFormat="webp"
+        widths={[180, 360, 540]}
+        sizes="(min-width: 640px) 168px, 128px"
+        loading="eager"
+        class="absolute bottom-0 -left-3.5 h-auto w-[27%] max-w-[168px] min-w-[128px] animate-float drop-shadow-[0_24px_46px_rgb(2_8_20/0.5)]"
+      />
+    </div>
+  </div>
+</section>

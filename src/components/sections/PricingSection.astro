@@ -1,0 +1,24 @@
+---
+import { plans, site } from '../../data/site';
+import Pricing from '../Pricing';
+---
+
+<section id="tarifs" aria-labelledby="pricing-title" class="bg-surface py-20 lg:py-28">
+  <div class="container-page">
+    <div data-reveal-stagger class="mx-auto max-w-2xl text-center">
+      <p class="eyebrow">Tarifs</p>
+      <h2
+        id="pricing-title"
+        class="mt-4 text-3xl leading-tight font-extrabold tracking-[-0.02em] text-balance text-navy-950 sm:text-4xl"
+      >
+        Des prix clairs, en FCFA
+      </h2>
+      <p class="mt-4 text-lg text-navy-500">
+        Toutes les formules commencent par 7 jours d’essai gratuit. Paiement par Mobile Money ou carte.
+      </p>
+    </div>
+    <div data-reveal="fade" class="mt-10">
+      <Pricing client:visible plans={plans} signupUrl={site.signupUrl} />
+    </div>
+  </div>
+</section>

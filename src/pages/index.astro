@@ -1,0 +1,29 @@
+---
+import Header from '../components/Header';
+import Benefits from '../components/sections/Benefits.astro';
+import Faq from '../components/sections/Faq.astro';
+import Features from '../components/sections/Features.astro';
+import FinalCta from '../components/sections/FinalCta.astro';
+import Footer from '../components/sections/Footer.astro';
+import Hero from '../components/sections/Hero.astro';
+import HowItWorks from '../components/sections/HowItWorks.astro';
+import PricingSection from '../components/sections/PricingSection.astro';
+import Roles from '../components/sections/Roles.astro';
+import { mainNav, resourcesNav, site } from '../data/site';
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout>
+  <Header client:load nav={mainNav} resources={resourcesNav} loginUrl={site.loginUrl} signupUrl={site.signupUrl} />
+  <main id="contenu">
+    <Hero />
+    <Benefits />
+    <Features />
+    <HowItWorks />
+    <Roles />
+    <PricingSection />
+    <Faq />
+    <FinalCta />
+  </main>
+  <Footer />
+</Layout>

@@ -1,0 +1,114 @@
+---
+import { Picture } from 'astro:assets';
+import { ArrowLeft, Check } from 'lucide-react';
+import phoneRender from '../assets/hero/iphone-app.png';
+import tabletRender from '../assets/hero/tablet-dashboard.png';
+import { Logo } from '../components/brand/Logo';
+import { site, whatsappUrl } from '../data/site';
+import Layout from './Layout.astro';
+
+type Props = {
+  title: string;
+  description: string;
+  noindex?: boolean;
+  asideTitle: string;
+  asideText: string;
+  points: string[];
+  width?: 'md' | 'lg';
+};
+
+const { title, description, noindex, asideTitle, asideText, points, width = 'md' } = Astro.props;
+---
+
+<Layout title={title} description={description} noindex={noindex}>
+  <div class="grid min-h-dvh lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+    <aside class="relative isolate hidden overflow-hidden bg-navy-950 text-white lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col">
+      <div class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
+        <div class="absolute inset-0 bg-[radial-gradient(40rem_30rem_at_80%_85%,rgb(37_99_235/0.2),transparent_60%),radial-gradient(30rem_24rem_at_0%_0%,rgb(244_181_44/0.12),transparent_60%)]"></div>
+        <div class="absolute inset-0 bg-[linear-gradient(rgb(255_255_255/0.035)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.035)_1px,transparent_1px)] mask-[radial-gradient(ellipse_at_center,black,transparent_75%)] bg-size-[56px_56px]"></div>
+      </div>
+
+      <div class="flex min-h-0 flex-1 flex-col px-12 pt-10 xl:px-16">
+        <a href="/" aria-label="GOLDSTOCK, accueil" class="w-fit rounded-lg">
+          <Logo />
+        </a>
+
+        <div class="mt-14 max-w-md animate-fade-up">
+          <p class="text-3xl leading-tight font-extrabold tracking-[-0.02em] text-balance xl:text-4xl">{asideTitle}</p>
+          <p class="mt-4 text-lg leading-relaxed text-white/65">{asideText}</p>
+          <ul class="mt-8 space-y-3.5">
+            {points.map((point) => (
+              <li class="flex items-center gap-3 font-medium text-white/90">
+                <span class="grid size-6 shrink-0 place-items-center rounded-full bg-gold-400/15 text-gold-400">
+                  <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
+                </span>
+                {point}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div class="relative mt-auto w-full max-w-[34rem] translate-y-[14%] pt-10" aria-hidden="true">
+          <Picture
+            src={tabletRender}
+            alt=""
+            formats={['avif']}
+            fallbackFormat="webp"
+            widths={[480, 720, 960, 1088]}
+            sizes="34rem"
+            loading="lazy"
+            class="block h-auto w-full drop-shadow-[0_34px_64px_rgb(2_8_20/0.55)]"
+          />
+          <Picture
+            src={phoneRender}
+            alt=""
+            formats={['avif']}
+            fallbackFormat="webp"
+            widths={[180, 360]}
+            sizes="9rem"
+            loading="lazy"
+            class="absolute bottom-[18%] -left-4 h-auto w-[26%] animate-float drop-shadow-[0_24px_46px_rgb(2_8_20/0.5)]"
+          />
+        </div>
+      </div>
+    </aside>
+
+    <main id="contenu" class="flex flex-col bg-white px-5 py-6 sm:px-10 lg:px-14">
+      <div class="flex items-center justify-between gap-4">
+        <a href="/" aria-label="GOLDSTOCK, accueil" class="rounded-lg lg:invisible">
+          <Logo tone="onLight" />
+        </a>
+        <a
+          href="/"
+          class="inline-flex items-center gap-1.5 rounded-lg text-sm font-semibold text-navy-500 transition hover:text-navy-900"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Retour au site
+        </a>
+      </div>
+
+      <div
+        class:list={[
+          'mx-auto flex w-full flex-1 animate-fade-up flex-col justify-center py-12',
+          width === 'lg' ? 'max-w-lg' : 'max-w-md',
+        ]}
+      >
+        <slot />
+      </div>
+
+      <p class="text-center text-sm text-navy-400">
+        Besoin d’aide&nbsp;?
+        <a
+          href={whatsappUrl()}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="font-semibold text-navy-600 underline-offset-4 hover:underline"
+        >
+          Écrivez-nous sur WhatsApp
+        </a>
+        · © {new Date().getFullYear()}
+        {site.name}
+      </p>
+    </main>
+  </div>
+</Layout>

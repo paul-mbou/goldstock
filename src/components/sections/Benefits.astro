@@ -1,0 +1,33 @@
+---
+import { Headset, Rocket, Smartphone } from 'lucide-react';
+import { benefits } from '../../data/site';
+import CameroonFlag from '../brand/CameroonFlag.astro';
+
+const icons = { rocket: Rocket, device: Smartphone, support: Headset } as const;
+---
+
+<section aria-label="Pourquoi GOLDSTOCK" class="border-b border-navy-100 bg-white">
+  <ul
+    data-reveal-stagger
+    class="container-page grid grid-cols-1 gap-y-6 py-9 sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-navy-100"
+  >
+    {benefits.map(({ icon, title, text }) => {
+      const Icon = icon === 'flag' ? null : icons[icon];
+      return (
+        <li class="flex items-center gap-4 lg:justify-center lg:px-6">
+          <span class="grid size-14 shrink-0 place-items-center rounded-full bg-navy-50 text-navy-800">
+            {Icon ? (
+              <Icon className="size-6" strokeWidth={1.75} aria-hidden="true" />
+            ) : (
+              <CameroonFlag class="h-6 w-9" />
+            )}
+          </span>
+          <span>
+            <span class="block font-bold text-navy-900">{title}</span>
+            <span class="block text-sm text-navy-500">{text}</span>
+          </span>
+        </li>
+      );
+    })}
+  </ul>
+</section>

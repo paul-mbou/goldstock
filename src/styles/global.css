@@ -1,0 +1,187 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-navy-50: #f4f6fa;
+  --color-navy-100: #e8ecf3;
+  --color-navy-200: #d3dae6;
+  --color-navy-300: #a9b4c8;
+  --color-navy-400: #7c88a1;
+  --color-navy-500: #5b6680;
+  --color-navy-600: #3f4a64;
+  --color-navy-700: #26324d;
+  --color-navy-800: #15213b;
+  --color-navy-900: #0d182e;
+  --color-navy-950: #070f1f;
+
+  --color-gold-50: #fff8e8;
+  --color-gold-100: #fdefc9;
+  --color-gold-200: #fbdc8e;
+  --color-gold-300: #f8c954;
+  --color-gold-400: #f4b52c;
+  --color-gold-500: #e89d12;
+  --color-gold-600: #c57a0b;
+  --color-gold-700: #9c5a0d;
+
+  --color-surface: #f6f8fb;
+
+  --shadow-card: 0 1px 2px rgb(13 24 46 / 0.04), 0 8px 24px -12px rgb(13 24 46 / 0.12);
+  --shadow-device: 0 40px 80px -30px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.06);
+
+  --animate-fade-up: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-float: float 4.6s ease-in-out infinite;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-12px);
+    }
+  }
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-white font-sans text-navy-900 antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-gold-400;
+  }
+
+  ::selection {
+    @apply bg-gold-200 text-navy-950;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[0.9375rem] font-semibold whitespace-nowrap transition duration-200 select-none;
+}
+
+@utility btn-gold {
+  @apply btn bg-linear-to-b from-gold-300 to-gold-500 text-navy-950 shadow-[0_8px_24px_-8px_rgb(232_157_18/0.6)] hover:brightness-105 active:translate-y-px;
+}
+
+@utility btn-ghost-dark {
+  @apply btn border border-white/25 text-white hover:border-white/50 hover:bg-white/5;
+}
+
+@utility btn-navy {
+  @apply btn bg-navy-900 text-white hover:bg-navy-800 active:translate-y-px;
+}
+
+@utility eyebrow {
+  @apply inline-flex items-center rounded-full bg-gold-100 px-3 py-1 text-xs font-bold tracking-wider text-gold-700 uppercase;
+}
+
+@utility container-page {
+  @apply mx-auto w-full max-w-[90rem] px-5 sm:px-8 lg:px-12;
+}
+
+/*
+ * Scroll reveal. `data-reveal` animates one element, `data-reveal-stagger` animates
+ * its children one after another. Layout.astro flags the root once the observer can
+ * run, so content stays visible without JavaScript, in print and with reduced motion.
+ */
+@media screen and (prefers-reduced-motion: no-preference) {
+  :root[data-reveal-ready] :is([data-reveal]:not([data-revealed]), [data-reveal-stagger]:not([data-revealed]) > *) {
+    opacity: 0;
+  }
+
+  :is([data-reveal][data-revealed], [data-reveal-stagger][data-revealed] > *) {
+    animation: reveal var(--reveal-duration, 0.95s) cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation-delay: calc(var(--reveal-delay, 0ms) + var(--i, 0) * var(--reveal-step, 90ms));
+  }
+
+  [data-reveal='fade'] {
+    --reveal-y: 0px;
+    --reveal-blur: 0px;
+  }
+
+  [data-reveal='zoom'] {
+    --reveal-y: 32px;
+    --reveal-scale: 0.96;
+    --reveal-blur: 0px;
+  }
+
+  [data-reveal='line'][data-revealed] {
+    transform-origin: left;
+    animation-name: reveal-line;
+    animation-duration: 1.4s;
+  }
+
+  [data-reveal-stagger] > :nth-child(2) {
+    --i: 1;
+  }
+
+  [data-reveal-stagger] > :nth-child(3) {
+    --i: 2;
+  }
+
+  [data-reveal-stagger] > :nth-child(4) {
+    --i: 3;
+  }
+
+  [data-reveal-stagger] > :nth-child(5) {
+    --i: 4;
+  }
+
+  [data-reveal-stagger] > :nth-child(6) {
+    --i: 5;
+  }
+
+  [data-reveal-stagger] > :nth-child(n + 7) {
+    --i: 6;
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--reveal-y, 28px), 0) scale(var(--reveal-scale, 1));
+    filter: blur(var(--reveal-blur, 6px));
+  }
+}
+
+@keyframes reveal-line {
+  from {
+    transform: scaleX(0);
+  }
+}

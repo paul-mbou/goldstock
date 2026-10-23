@@ -1,0 +1,39 @@
+---
+import { steps } from '../../data/site';
+---
+
+<section id="comment-ca-marche" aria-labelledby="steps-title" class="bg-white py-20 lg:py-28">
+  <div class="container-page">
+    <div data-reveal-stagger class="mx-auto max-w-2xl text-center">
+      <p class="eyebrow">Comment ça marche</p>
+      <h2
+        id="steps-title"
+        class="mt-4 text-3xl leading-tight font-extrabold tracking-[-0.02em] text-balance text-navy-950 sm:text-4xl"
+      >
+        Opérationnel en moins de 10 minutes
+      </h2>
+      <p class="mt-4 text-lg text-navy-500">
+        Pas de formation compliquée, pas de matériel coûteux. Votre téléphone suffit.
+      </p>
+    </div>
+
+    <div class="relative mt-14">
+      <span
+        data-reveal="line"
+        class="absolute top-7 right-[16%] left-[16%] hidden h-px [--reveal-delay:250ms] bg-[repeating-linear-gradient(90deg,var(--color-gold-300)_0_8px,transparent_8px_16px)] md:block"
+        aria-hidden="true"
+      ></span>
+      <ol data-reveal-stagger class="relative grid gap-10 [--reveal-step:220ms] md:grid-cols-3 md:gap-6">
+        {steps.map((step, index) => (
+          <li class="relative text-center">
+            <span class="relative mx-auto grid size-14 place-items-center rounded-2xl border border-gold-200 bg-linear-to-b from-gold-50 to-gold-100 text-xl font-extrabold text-gold-700 shadow-card ring-8 ring-white">
+              {index + 1}
+            </span>
+            <h3 class="mt-6 text-lg font-bold text-navy-900">{step.title}</h3>
+            <p class="mx-auto mt-2 max-w-xs leading-relaxed text-navy-500">{step.text}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </div>
+</section>

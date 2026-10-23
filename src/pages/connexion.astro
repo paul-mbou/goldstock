@@ -1,0 +1,30 @@
+---
+import LoginForm from '../components/auth/LoginForm';
+import { site } from '../data/site';
+import AuthLayout from '../layouts/AuthLayout.astro';
+---
+
+<AuthLayout
+  title={`Connexion — ${site.name}`}
+  description="Connectez-vous à votre espace GOLDSTOCK pour suivre vos ventes, vos stocks et vos versements."
+  noindex
+  asideTitle="Votre boutique vous attend."
+  asideText="Retrouvez vos ventes du jour, vos stocks et les versements de vos gérants, où que vous soyez."
+  points={[
+    'Ventes et stocks en temps réel',
+    'Accessible sur ordinateur et smartphone',
+    'Données sauvegardées chaque jour',
+  ]}
+>
+  <h1 class="text-3xl font-extrabold tracking-[-0.02em] text-navy-950">Connexion</h1>
+  <p class="mt-2 mb-8 text-navy-500">Heureux de vous revoir. Connectez-vous avec votre numéro de téléphone.</p>
+
+  <LoginForm client:load />
+
+  <p class="mt-8 text-center text-sm text-navy-500">
+    Pas encore de compte&nbsp;?
+    <a href={site.signupUrl} class="font-semibold text-gold-700 hover:text-gold-600">
+      Essai gratuit {site.trialDays} jours
+    </a>
+  </p>
+</AuthLayout>

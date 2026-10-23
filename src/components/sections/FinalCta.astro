@@ -1,0 +1,38 @@
+---
+import { ArrowRight } from 'lucide-react';
+import { site, whatsappUrl } from '../../data/site';
+import { WhatsAppIcon } from '../brand/WhatsAppIcon';
+---
+
+<section aria-labelledby="cta-title" class="bg-white pb-20 lg:pb-28">
+  <div class="container-page">
+    <div
+      data-reveal="zoom"
+      class="relative isolate overflow-hidden rounded-[2rem] bg-navy-950 px-6 py-16 text-center text-white sm:px-12 lg:py-20"
+    >
+      <div
+        class="absolute inset-0 -z-10 bg-[radial-gradient(40rem_20rem_at_50%_120%,rgb(244_181_44/0.28),transparent_70%)]"
+        aria-hidden="true"
+      ></div>
+      <h2
+        id="cta-title"
+        class="mx-auto max-w-3xl text-3xl leading-tight font-extrabold tracking-[-0.02em] text-balance sm:text-5xl"
+      >
+        Reprenez le contrôle de <span class="text-gold-400">chaque franc</span> dès aujourd’hui
+      </h2>
+      <p class="mx-auto mt-5 max-w-xl text-lg text-white/70">
+        7 jours gratuits, toutes les fonctionnalités, sans carte bancaire. Notre équipe vous aide à démarrer.
+      </p>
+      <div class="mt-9 flex flex-col justify-center gap-3 sm:flex-row sm:gap-4">
+        <a href={site.signupUrl} class="btn-gold group h-14 px-7 text-base">
+          Essayer gratuitement 7 jours
+          <ArrowRight className="size-5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+        </a>
+        <a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" class="btn-ghost-dark h-14 px-7 text-base">
+          <WhatsAppIcon className="size-5 text-emerald-400" />
+          Parler à un conseiller
+        </a>
+      </div>
+    </div>
+  </div>
+</section>

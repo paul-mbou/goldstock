@@ -1,0 +1,32 @@
+---
+import SignupForm from '../components/auth/SignupForm';
+import { site } from '../data/site';
+import AuthLayout from '../layouts/AuthLayout.astro';
+---
+
+<AuthLayout
+  title={`Essai gratuit ${site.trialDays} jours — ${site.name}`}
+  description={`Créez votre compte GOLDSTOCK en 2 minutes et testez toutes les fonctionnalités pendant ${site.trialDays} jours, sans carte bancaire.`}
+  asideTitle={`${site.trialDays} jours pour reprendre le contrôle de chaque franc.`}
+  asideText="Produits, ventes, stocks, employés et versements des gérants : tout votre commerce au même endroit."
+  points={[
+    'Toutes les fonctionnalités incluses',
+    'Aucune carte bancaire demandée',
+    'Accompagnement sur WhatsApp, 7j/7',
+    'Sans engagement, annulable à tout moment',
+  ]}
+  width="lg"
+>
+  <p class="eyebrow w-fit">Essai gratuit · {site.trialDays} jours</p>
+  <h1 class="mt-4 text-3xl font-extrabold tracking-[-0.02em] text-navy-950">Créez votre compte</h1>
+  <p class="mt-2 mb-8 text-navy-500">2 minutes suffisent. Notre équipe vous aide à configurer votre boutique.</p>
+
+  <SignupForm client:load />
+
+  <p class="mt-8 text-center text-sm text-navy-500">
+    Déjà un compte&nbsp;?
+    <a href={site.loginUrl} class="font-semibold text-gold-700 hover:text-gold-600">
+      Se connecter
+    </a>
+  </p>
+</AuthLayout>

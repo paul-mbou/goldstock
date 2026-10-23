@@ -1,0 +1,67 @@
+---
+import { ChartColumn, HandCoins, Package, ShoppingCart, Tags, Users } from 'lucide-react';
+import { features } from '../../data/site';
+import { Picture } from 'astro:assets';
+import tabletRender from '../../assets/hero/tablet-dashboard.png';
+
+const icons = {
+  stock: Package,
+  sales: ShoppingCart,
+  catalog: Tags,
+  reports: ChartColumn,
+  team: Users,
+  payouts: HandCoins,
+} as const;
+---
+
+<section id="fonctionnalites" aria-labelledby="features-title" class="bg-surface py-20 lg:py-28">
+  <div class="container-page grid items-center gap-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-16">
+    <div data-reveal="zoom" class="relative order-last mx-auto w-full max-w-[40rem] lg:order-first">
+      <div
+        class="absolute inset-[12%_8%] -z-10 rounded-full bg-[radial-gradient(closest-side,rgb(37_99_235/0.14),transparent)] blur-2xl"
+        aria-hidden="true"
+      ></div>
+      <Picture
+        src={tabletRender}
+        alt="Tableau de bord GOLDSTOCK sur tablette : ventes, encaissements et stock en FCFA"
+        formats={['avif']}
+        fallbackFormat="webp"
+        widths={[480, 720, 960, 1280, tabletRender.width]}
+        sizes="(min-width: 1024px) 40rem, 92vw"
+        class="block h-auto w-full drop-shadow-[0_30px_50px_rgb(13_24_46/0.28)]"
+      />
+    </div>
+
+    <div>
+      <div data-reveal-stagger>
+        <p class="eyebrow">Fonctionnalités</p>
+        <h2
+          id="features-title"
+          class="mt-4 text-3xl leading-tight font-extrabold tracking-[-0.02em] text-balance text-navy-950 sm:text-4xl"
+        >
+          Tout ce dont vous avez besoin pour gérer votre commerce
+        </h2>
+        <p class="mt-4 max-w-xl text-lg leading-relaxed text-navy-500">
+          GOLDSTOCK vous offre une solution complète et simple pour gérer efficacement votre boutique au quotidien.
+        </p>
+      </div>
+
+      <ul data-reveal-stagger class="mt-9 grid gap-4 [--reveal-delay:200ms] sm:grid-cols-2">
+        {features.map(({ icon, title, text }) => {
+          const Icon = icons[icon];
+          return (
+            <li class="flex gap-4 rounded-2xl border border-navy-100 bg-white p-5 shadow-card transition duration-300 hover:-translate-y-0.5 hover:border-gold-200">
+              <span class="grid size-11 shrink-0 place-items-center rounded-xl bg-gold-100 text-gold-600">
+                <Icon className="size-5" strokeWidth={2} aria-hidden="true" />
+              </span>
+              <div>
+                <h3 class="font-bold text-navy-900">{title}</h3>
+                <p class="mt-1 text-sm leading-relaxed text-navy-500">{text}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  </div>
+</section>

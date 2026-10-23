@@ -1,0 +1,60 @@
+---
+import { Mail } from 'lucide-react';
+import { mainNav, site, whatsappUrl } from '../../data/site';
+import { Logo } from '../brand/Logo';
+import { WhatsAppIcon } from '../brand/WhatsAppIcon';
+
+const year = new Date().getFullYear();
+const displayPhone = `+${site.whatsappNumber.replace(/^(\d{3})(\d)(\d{2})(\d{2})(\d{2})(\d{2})$/, '$1 $2 $3 $4 $5 $6')}`;
+---
+
+<footer class="bg-navy-950 text-white/70">
+  <div class="container-page grid gap-12 py-16 md:grid-cols-[1.5fr_1fr_1fr]">
+    <div class="max-w-sm">
+      <Logo />
+      <p class="mt-5 leading-relaxed">
+        Le logiciel de gestion de stock et de ventes pensé pour les boutiques et commerces camerounais.
+      </p>
+    </div>
+
+    <nav aria-label="Liens du pied de page">
+      <h2 class="text-sm font-bold tracking-wider text-white uppercase">Produit</h2>
+      <ul class="mt-5 space-y-3">
+        {mainNav.map((link) => (
+          <li>
+            <a href={link.href} class="transition hover:text-gold-300">
+              {link.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    <div>
+      <h2 class="text-sm font-bold tracking-wider text-white uppercase">Contact</h2>
+      <ul class="mt-5 space-y-3">
+        <li>
+          <a
+            href={whatsappUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-2.5 transition hover:text-gold-300"
+          >
+            <WhatsAppIcon className="size-4 text-emerald-400" />
+            {displayPhone}
+          </a>
+        </li>
+        <li>
+          <a href={`mailto:${site.email}`} class="inline-flex items-center gap-2.5 transition hover:text-gold-300">
+            <Mail className="size-4" aria-hidden="true" />
+            {site.email}
+          </a>
+        </li>
+        <li class="pt-1 text-sm text-white/50">Yaoundé · Douala, Cameroun</li>
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-white/10">
+    <p class="container-page py-6 text-sm text-white/45">© {year} GOLDSTOCK. Tous droits réservés.</p>
+  </div>
+</footer>

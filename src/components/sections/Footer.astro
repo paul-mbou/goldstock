@@ -1,11 +1,10 @@
 ---
-import { Mail } from 'lucide-react';
+import { Headset, Mail } from 'lucide-react';
 import { mainNav, site, whatsappUrl } from '../../data/site';
 import { Logo } from '../brand/Logo';
 import { WhatsAppIcon } from '../brand/WhatsAppIcon';
 
 const year = new Date().getFullYear();
-const displayPhone = `+${site.whatsappNumber.replace(/^(\d{3})(\d)(\d{2})(\d{2})(\d{2})(\d{2})$/, '$1 $2 $3 $4 $5 $6')}`;
 ---
 
 <footer class="bg-navy-950 text-white/70">
@@ -41,7 +40,16 @@ const displayPhone = `+${site.whatsappNumber.replace(/^(\d{3})(\d)(\d{2})(\d{2})
             class="inline-flex items-center gap-2.5 transition hover:text-gold-300"
           >
             <WhatsAppIcon className="size-4 text-emerald-400" />
-            {displayPhone}
+            {site.supportPhone}
+          </a>
+        </li>
+        <li>
+          <a
+            href={`tel:+${site.whatsappNumber}`}
+            class="inline-flex items-center gap-2.5 transition hover:text-gold-300"
+          >
+            <Headset className="size-4" aria-hidden="true" />
+            Support client
           </a>
         </li>
         <li>

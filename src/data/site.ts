@@ -8,7 +8,8 @@ export const site = {
   signupUrl: '/essai-gratuit',
   loginUrl: '/connexion',
   trialDays: 7,
-  whatsappNumber: '237600000000',
+  whatsappNumber: '18733000708',
+  supportPhone: '+1 (873) 300-0708',
   email: 'contact@goldstock.cm',
   demoVideoUrl: '',
 } as const;

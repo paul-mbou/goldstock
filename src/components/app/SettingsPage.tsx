@@ -315,7 +315,7 @@ function AlertSettings({ onSaved }: { onSaved: (message: string) => void }) {
 }
 
 function Appearance() {
-  const [theme, setTheme] = useState<ThemePreference>('system');
+  const [theme, setTheme] = useState<ThemePreference>('light');
   useEffect(() => setTheme(getThemePreference()), []);
 
   return (
@@ -337,11 +337,10 @@ function Appearance() {
               setTheme(id);
               applyTheme(id);
             }}
-            className={`flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left font-semibold transition ${
-              theme === id
+            className={`flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left font-semibold transition ${theme === id
                 ? 'border-gold-500 bg-gold-50 text-ink dark:bg-gold-400/10'
                 : 'border-line text-ink-soft hover:border-navy-200 dark:hover:border-white/20'
-            }`}
+              }`}
           >
             <Icon className="size-5" aria-hidden="true" />
             {label}

@@ -23,7 +23,7 @@ const current = Astro.url.pathname.replace(/\/+$/, '') || '/';
     {/* Before first paint, so the saved theme never flashes. */}
     <script is:inline>
       const storedTheme = localStorage.getItem('gs-theme');
-      if (storedTheme === 'dark' || (!storedTheme && matchMedia('(prefers-color-scheme: dark)').matches)) {
+      if (storedTheme === 'dark' || (storedTheme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) {
         document.documentElement.classList.add('dark');
       }
     </script>

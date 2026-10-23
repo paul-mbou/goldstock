@@ -20,7 +20,11 @@ export type AuthResult = { ok: true; redirectUrl: string } | { ok: false; error:
 export const isApiConfigured = Boolean(PUBLIC_API_URL);
 
 async function post(path: string, body: unknown, errorByStatus: Record<number, AuthError>): Promise<AuthResult> {
-  if (!PUBLIC_API_URL) return { ok: false, error: 'unavailable' };
+  /** Test mode until the backend exists: every valid form opens the demo dashboard. */
+  if (!PUBLIC_API_URL) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return { ok: true, redirectUrl: site.appUrl };
+  }
 
   try {
     const response = await fetch(new URL(path, PUBLIC_API_URL), {

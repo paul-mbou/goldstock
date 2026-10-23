@@ -1,5 +1,5 @@
 import { ArrowRight, LoaderCircle } from 'lucide-react';
-import { useState, type SubmitEvent, type ReactNode } from 'react';
+import { useState, type ReactNode, type SubmitEvent } from 'react';
 import { site, whatsappUrl } from '../../data/site';
 import { formatPhone, isApiConfigured, login, normalizePhone, type AuthError } from '../../lib/auth';
 import { FormAlert, PasswordField, PhoneField } from './fields';
@@ -73,13 +73,9 @@ export default function LoginForm() {
     <form noValidate onSubmit={handleSubmit} className="space-y-5">
       {!isApiConfigured && !serverError && (
         <FormAlert tone="info">
-          La connexion en ligne ouvre très bientôt. Vous n’avez pas encore de compte&nbsp;?{' '}
-          <a href={site.signupUrl} className="font-semibold underline">
-            Demandez votre essai gratuit
-          </a>{' '}
-          ou{' '}
+          Version de test&nbsp;: entrez n’importe quel numéro valide et un mot de passe pour ouvrir le{' '}
           <a href={site.appUrl} className="font-semibold underline">
-            découvrez le tableau de bord de démonstration
+            tableau de bord de démonstration
           </a>
           .
         </FormAlert>

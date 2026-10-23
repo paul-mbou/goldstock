@@ -1,9 +1,9 @@
 import { ArrowLeft, ArrowRight, CircleCheck, LoaderCircle, LockKeyhole } from 'lucide-react';
-import { useEffect, useState, type SubmitEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode, type SubmitEvent } from 'react';
 import {
   cities,
-  FREE_MONTHS_PER_YEAR,
   formatFcfa,
+  FREE_MONTHS_PER_YEAR,
   plans,
   site,
   whatsappUrl,
@@ -136,11 +136,6 @@ export default function SignupForm() {
       return;
     }
 
-    if (!isApiConfigured) {
-      setHandoff(true);
-      return;
-    }
-
     setPending(true);
     const result = await signup({
       ...values,
@@ -269,9 +264,8 @@ export default function SignupForm() {
                 {[1, 2, 3].map((level) => (
                   <span
                     key={level}
-                    className={`h-1.5 flex-1 rounded-full transition-colors ${
-                      strength >= level ? strengthColors[strength] : 'bg-navy-100'
-                    }`}
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${strength >= level ? strengthColors[strength] : 'bg-navy-100'
+                      }`}
                   />
                 ))}
               </div>
@@ -290,11 +284,10 @@ export default function SignupForm() {
             return (
               <label
                 key={plan.id}
-                className={`relative flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 transition has-focus-visible:outline-2 has-focus-visible:outline-gold-400 sm:block sm:p-3.5 ${
-                  selected
+                className={`relative flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 transition has-focus-visible:outline-2 has-focus-visible:outline-gold-400 sm:block sm:p-3.5 ${selected
                     ? 'border-gold-400 bg-gold-50 ring-1 ring-gold-400'
                     : 'border-navy-200 bg-white hover:border-navy-300'
-                }`}
+                  }`}
               >
                 <input
                   type="radio"

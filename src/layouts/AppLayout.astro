@@ -1,0 +1,46 @@
+---
+import '@fontsource-variable/plus-jakarta-sans';
+import '../styles/global.css';
+import Sidebar from '../components/app/Sidebar.astro';
+import Topbar from '../components/app/Topbar';
+
+type Props = { title: string };
+
+const { title } = Astro.props;
+const current = Astro.url.pathname.replace(/\/+$/, '') || '/';
+---
+
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="robots" content="noindex" />
+    <title>{title} · GOLDSTOCK</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#070f1f" />
+    {/* Before first paint, so the saved theme never flashes. */}
+    <script is:inline>
+      const storedTheme = localStorage.getItem('gs-theme');
+      if (storedTheme === 'dark' || (!storedTheme && matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      }
+    </script>
+  </head>
+  <body class="min-h-dvh bg-canvas text-ink">
+    <a
+      href="#contenu"
+      class="sr-only z-[60] rounded-lg bg-gold-400 px-4 py-2 font-semibold text-navy-950 focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+    >
+      Aller au contenu
+    </a>
+    <Sidebar current={current} />
+    <div class="lg:pl-72">
+      <Topbar client:load current={current} />
+      <main id="contenu" class="mx-auto w-full max-w-[96rem] px-4 pt-6 pb-16 sm:px-6 lg:px-10 lg:pt-8">
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>

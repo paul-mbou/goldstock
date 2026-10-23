@@ -76,6 +76,10 @@ export default function LoginForm() {
           La connexion en ligne ouvre très bientôt. Vous n’avez pas encore de compte&nbsp;?{' '}
           <a href={site.signupUrl} className="font-semibold underline">
             Demandez votre essai gratuit
+          </a>{' '}
+          ou{' '}
+          <a href={site.appUrl} className="font-semibold underline">
+            découvrez le tableau de bord de démonstration
           </a>
           .
         </FormAlert>

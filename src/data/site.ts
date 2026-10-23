@@ -4,7 +4,7 @@ export const site = {
   description:
     'GOLDSTOCK centralise vos produits, vos ventes, vos stocks, vos employés et les versements de vos gérants. Essai gratuit 7 jours, sans carte bancaire.',
   locale: 'fr_CM',
-  appUrl: 'https://app.goldstock.cm',
+  appUrl: '/app',
   signupUrl: '/essai-gratuit',
   loginUrl: '/connexion',
   trialDays: 7,

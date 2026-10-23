@@ -1,5 +1,39 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Dashboard surfaces. Values switch with the `.dark` class set by AppLayout. */
+@theme inline {
+  --color-canvas: var(--gs-canvas);
+  --color-panel: var(--gs-panel);
+  --color-sunken: var(--gs-sunken);
+  --color-line: var(--gs-line);
+  --color-ink: var(--gs-ink);
+  --color-ink-soft: var(--gs-ink-soft);
+  --color-ink-mute: var(--gs-ink-mute);
+}
+
+:root {
+  --gs-canvas: #f6f8fb;
+  --gs-panel: #ffffff;
+  --gs-sunken: #f1f4f9;
+  --gs-line: #e6eaf1;
+  --gs-ink: #0d182e;
+  --gs-ink-soft: #3f4a64;
+  --gs-ink-mute: #5b6680;
+}
+
+.dark {
+  --gs-canvas: #070f1f;
+  --gs-panel: #0d182e;
+  --gs-sunken: #132039;
+  --gs-line: #1e2b46;
+  --gs-ink: #f4f6fa;
+  --gs-ink-soft: #c9d1de;
+  --gs-ink-mute: #929eb5;
+  color-scheme: dark;
+}
+
 @theme {
   --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
@@ -31,6 +65,30 @@
 
   --animate-fade-up: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-float: float 4.6s ease-in-out infinite;
+  --animate-dialog-in: dialog-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-sheet-in: sheet-in 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-drawer-in: drawer-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes drawer-in {
+    from {
+      opacity: 0.4;
+      transform: translateX(-40px);
+    }
+  }
+
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.98);
+    }
+  }
+
+  @keyframes sheet-in {
+    from {
+      opacity: 0.4;
+      transform: translateX(40px);
+    }
+  }
 
   @keyframes float {
     0%,
@@ -105,6 +163,14 @@
 
 @utility btn-navy {
   @apply btn bg-navy-900 text-white hover:bg-navy-800 active:translate-y-px;
+}
+
+@utility btn-quiet {
+  @apply btn border border-line bg-panel text-ink hover:bg-sunken active:translate-y-px;
+}
+
+@utility app-card {
+  @apply rounded-2xl border border-line bg-panel shadow-card dark:shadow-none;
 }
 
 @utility eyebrow {

@@ -18,20 +18,20 @@ export function Field({ id, label, error, hint, aside, children }: FieldProps) {
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-4">
-        <label htmlFor={id} className="text-sm font-semibold text-navy-800">
+        <label htmlFor={id} className="text-sm font-semibold text-navy-800 dark:text-navy-100">
           {label}
         </label>
         {aside}
       </div>
       {children(describedBy)}
       {error ? (
-        <p id={errorId} className="mt-2 flex items-center gap-1.5 text-sm font-medium text-red-600">
+        <p id={errorId} className="mt-2 flex items-center gap-1.5 text-sm font-medium text-red-600 dark:text-red-400">
           <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
           {error}
         </p>
       ) : (
         hint && (
-          <p id={hintId} className="mt-2 text-sm text-navy-500">
+          <p id={hintId} className="mt-2 text-sm text-navy-500 dark:text-navy-300">
             {hint}
           </p>
         )
@@ -41,10 +41,10 @@ export function Field({ id, label, error, hint, aside, children }: FieldProps) {
 }
 
 export const controlClass = (invalid: boolean) =>
-  `h-12 w-full rounded-xl border bg-white px-4 text-[0.9375rem] text-navy-900 transition placeholder:text-navy-300 focus:ring-4 focus-visible:outline-none ${
+  `h-12 w-full rounded-xl border bg-white px-4 text-[0.9375rem] text-navy-900 transition placeholder:text-navy-300 focus:ring-4 focus-visible:outline-none dark:bg-navy-950 dark:text-white dark:placeholder:text-navy-500 ${
     invalid
       ? 'border-red-400 focus:border-red-500 focus:ring-red-500/15'
-      : 'border-navy-200 hover:border-navy-300 focus:border-gold-500 focus:ring-gold-400/25'
+      : 'border-navy-200 hover:border-navy-300 focus:border-gold-500 focus:ring-gold-400/25 dark:border-white/10 dark:hover:border-white/20'
   }`;
 
 type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'children'> & {
@@ -76,7 +76,7 @@ export function PhoneField({ id, label, error, hint, aside, ...input }: InputPro
     <Field id={id} label={label} error={error} hint={hint} aside={aside}>
       {(describedBy) => (
         <div className="relative">
-          <span className="pointer-events-none absolute inset-y-2 left-0 flex items-center border-r border-navy-100 pr-3 pl-4 text-[0.9375rem] font-semibold text-navy-600">
+          <span className="pointer-events-none absolute inset-y-2 left-0 flex items-center border-r border-navy-100 pr-3 pl-4 text-[0.9375rem] font-semibold text-navy-600 dark:border-white/10 dark:text-navy-200">
             +237
           </span>
           <input
@@ -149,7 +149,7 @@ export function SelectField({ id, label, error, options, placeholder, ...select 
               {placeholder}
             </option>
             {options.map((option) => (
-              <option key={option} value={option} className="text-navy-900">
+              <option key={option} value={option} className="text-navy-900 dark:text-white">
                 {option}
               </option>
             ))}
@@ -169,7 +169,9 @@ export function FormAlert({ tone = 'error', children }: { tone?: 'error' | 'info
     <div
       role="alert"
       className={`flex gap-3 rounded-xl border p-4 text-sm leading-relaxed ${
-        tone === 'error' ? 'border-red-200 bg-red-50 text-red-800' : 'border-gold-200 bg-gold-50 text-navy-800'
+        tone === 'error'
+          ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-400/25 dark:bg-red-400/10 dark:text-red-200'
+          : 'border-gold-200 bg-gold-50 text-navy-800 dark:border-gold-400/25 dark:bg-gold-400/10 dark:text-navy-100'
       }`}
     >
       <CircleAlert

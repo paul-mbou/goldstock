@@ -3,16 +3,17 @@ import { formatFcfa } from './site';
 export { formatFcfa };
 
 /*
- * Demo data for the dashboard. Everything is derived from a fixed clock and a seeded
+ * Demo data for the merchant space. Everything is derived from a fixed clock and a seeded
  * generator so the server render and the hydrated islands always agree.
  */
 
 const TZ = 'Africa/Douala';
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
+export const MINUTE = 60_000;
+export const HOUR = 60 * MINUTE;
+export const DAY = 24 * HOUR;
 
 export const NOW = Date.parse('2026-10-23T14:30:00+01:00');
-const TODAY_START = Date.parse('2026-10-23T00:00:00+01:00');
+export const TODAY_START = Date.parse('2026-10-23T00:00:00+01:00');
 
 function seeded(seed: number) {
   return () => {
@@ -24,7 +25,15 @@ function seeded(seed: number) {
 }
 
 const roundTo = (value: number, step: number) => Math.round(value / step) * step;
-const pick = <T>(rand: () => number, list: readonly T[]) => list[Math.floor(rand() * list.length)];
+
+function weighted<T>(rand: () => number, entries: readonly (readonly [T, number])[]) {
+  let x = rand() * entries.reduce((sum, [, weight]) => sum + weight, 0);
+  for (const [value, weight] of entries) {
+    x -= weight;
+    if (x <= 0) return value;
+  }
+  return entries[0][0];
+}
 
 /* ------------------------------------------------------------------ formatting */
 
@@ -32,533 +41,807 @@ const dateFormat = (options: Intl.DateTimeFormatOptions) =>
   new Intl.DateTimeFormat('fr-FR', { timeZone: TZ, ...options });
 
 const fullDate = dateFormat({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const longDay = dateFormat({ weekday: 'long', day: 'numeric', month: 'long' });
 const shortDate = dateFormat({ day: '2-digit', month: '2-digit', year: 'numeric' });
 const dayMonth = dateFormat({ day: 'numeric', month: 'short' });
-const weekdayDay = dateFormat({ weekday: 'short', day: 'numeric' });
+const weekday = dateFormat({ weekday: 'short' });
+const dayOfMonth = dateFormat({ day: 'numeric' });
 const time = dateFormat({ hour: '2-digit', minute: '2-digit' });
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 export const formatFullDate = (ts: number) => capitalize(fullDate.format(ts));
+export const formatLongDay = (ts: number) => capitalize(longDay.format(ts));
 export const formatShortDate = (ts: number) => shortDate.format(ts);
 export const formatDayMonth = (ts: number) => dayMonth.format(ts);
+export const formatWeekday = (ts: number) => capitalize(weekday.format(ts).replace('.', ''));
+export const formatDayOfMonth = (ts: number) => dayOfMonth.format(ts);
 export const formatTime = (ts: number) => time.format(ts).replace(':', 'h');
 
-/** "Aujourd'hui, 11h20", "Hier, 18h05" or "19/10/2026, 10h40". */
+/** "Aujourd'hui, 11h20", "Hier, 18h05" or "19 oct., 10h40". */
 export function formatWhen(ts: number) {
   const days = Math.floor((TODAY_START + DAY - 1 - ts) / DAY);
-  const day = days === 0 ? 'Aujourd’hui' : days === 1 ? 'Hier' : formatShortDate(ts);
+  const day = days <= 0 ? 'Aujourd’hui' : days === 1 ? 'Hier' : formatDayMonth(ts);
   return `${day}, ${formatTime(ts)}`;
 }
 
-/** "il y a 12 min", "il y a 3 h", "il y a 2 j". */
+/** "à l'instant", "il y a 12 min", "il y a 3 h", "il y a 2 j". */
 export function formatAgo(ts: number) {
-  const minutes = Math.max(1, Math.round((NOW - ts) / 60_000));
+  const minutes = Math.round((NOW - ts) / MINUTE);
+  if (minutes < 1) return 'à l’instant';
   if (minutes < 60) return `il y a ${minutes} min`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `il y a ${hours} h`;
   return `il y a ${Math.round(hours / 24)} j`;
 }
 
-export const formatNumber = (value: number) => new Intl.NumberFormat('fr-FR').format(value).replace(/\s/g, '\u00a0');
+export const formatNumber = (value: number) =>
+  new Intl.NumberFormat('fr-FR').format(Math.round(value)).replace(/\s/g, '\u00a0');
 
 /** Axis labels: 250 000 → "250 k", 1 250 000 → "1,25 M". */
 export function formatCompact(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}\u00a0M`;
   if (value >= 1_000) return `${Math.round(value / 1_000)}\u00a0k`;
-  return String(value);
+  return String(Math.round(value));
 }
 
 export const percentChange = (current: number, previous: number) =>
   previous === 0 ? 0 : Math.round(((current - previous) / previous) * 1000) / 10;
 
+export const formatPercent = (value: number) => `${value.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}\u00a0%`;
+
+export const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
 /* ------------------------------------------------------------------ business */
 
-export const business = {
-  name: 'Boutique Diva',
-  initials: 'BD',
-  city: 'Douala',
-  plan: { name: 'Business', price: 12_000, users: 10, shops: 3, renewsOn: Date.parse('2026-11-15T00:00:00+01:00') },
-  owner: { name: 'Awa Ngono', firstName: 'Awa', initials: 'AN', phone: '+237 677 41 22 90' },
-  shops: ['Akwa', 'Bonapriso'] as const,
+export const SHOPS = ['Akwa', 'Bonapriso'] as const;
+export type Shop = (typeof SHOPS)[number];
+
+export type Tone = 'gold' | 'navy' | 'teal' | 'rose' | 'violet';
+
+/* ------------------------------------------------------------------ roles */
+
+export type RoleId = 'owner' | 'manager' | 'seller' | 'stock';
+export type ScreenId =
+  | 'dash'
+  | 'pos'
+  | 'sales'
+  | 'products'
+  | 'categories'
+  | 'stock'
+  | 'suppliers'
+  | 'reports'
+  | 'deposits'
+  | 'team'
+  | 'subscription'
+  | 'settings'
+  | 'notifications'
+  | 'support';
+
+export type Role = {
+  label: string;
+  summary: string;
+  memberId: string;
+  screens: ScreenId[];
+  /** Sees revenue figures at all. */
+  revenue: boolean;
+  /** Sees every sale, or only their own. */
+  allSales: boolean;
+  margins: boolean;
+  costs: boolean;
+  maxDiscount: number;
+  cancel: boolean;
+  editCatalog: boolean;
+  manageTeam: boolean;
 };
 
-export type Shop = (typeof business.shops)[number];
+const everyScreen: ScreenId[] = [
+  'dash',
+  'pos',
+  'sales',
+  'products',
+  'categories',
+  'stock',
+  'suppliers',
+  'reports',
+  'deposits',
+  'team',
+  'subscription',
+  'settings',
+  'notifications',
+  'support',
+];
 
-/* ------------------------------------------------------------------ products */
+export const ROLES: Record<RoleId, Role> = {
+  owner: {
+    label: 'Propriétaire',
+    summary: 'Accès complet',
+    memberId: 'u1',
+    screens: everyScreen,
+    revenue: true,
+    allSales: true,
+    margins: true,
+    costs: true,
+    maxDiscount: 30,
+    cancel: true,
+    editCatalog: true,
+    manageTeam: true,
+  },
+  manager: {
+    label: 'Gérant',
+    summary: 'Gère la boutique au quotidien',
+    memberId: 'u2',
+    screens: everyScreen.filter((screen) => screen !== 'subscription'),
+    revenue: true,
+    allSales: true,
+    margins: true,
+    costs: true,
+    maxDiscount: 20,
+    cancel: true,
+    editCatalog: true,
+    manageTeam: false,
+  },
+  seller: {
+    label: 'Vendeur',
+    summary: 'Encaisse en caisse',
+    memberId: 'u4',
+    screens: ['dash', 'pos', 'sales', 'products', 'notifications', 'support'],
+    revenue: true,
+    allSales: false,
+    margins: false,
+    costs: false,
+    maxDiscount: 10,
+    cancel: false,
+    editCatalog: false,
+    manageTeam: false,
+  },
+  stock: {
+    label: 'Magasinier',
+    summary: 'Gère le stock et les réceptions',
+    memberId: 'u6',
+    screens: ['dash', 'products', 'categories', 'stock', 'suppliers', 'notifications', 'support'],
+    revenue: false,
+    allSales: false,
+    margins: false,
+    costs: true,
+    maxDiscount: 0,
+    cancel: false,
+    editCatalog: true,
+    manageTeam: false,
+  },
+};
 
-export const categories = ['Robes', 'Tops', 'Pantalons', 'Jupes', 'Accessoires', 'Chaussures'] as const;
-export type Category = (typeof categories)[number];
+export const ROLE_IDS = Object.keys(ROLES) as RoleId[];
+
+/** Rows of the "Qui peut faire quoi ?" matrix. `true`, `false` or a short qualifier. */
+export const permissionMatrix: { label: string; values: Record<RoleId, boolean | string> }[] = [
+  { label: 'Encaisser les ventes', values: { owner: true, manager: true, seller: true, stock: false } },
+  { label: 'Accorder une remise', values: { owner: '30 %', manager: '20 %', seller: '10 %', stock: false } },
+  { label: 'Annuler ou rembourser', values: { owner: true, manager: true, seller: false, stock: false } },
+  { label: 'Voir les marges', values: { owner: true, manager: true, seller: false, stock: 'Prix d’achat' } },
+  { label: 'Modifier le catalogue', values: { owner: true, manager: true, seller: false, stock: true } },
+  { label: 'Stock et réceptions', values: { owner: true, manager: true, seller: false, stock: true } },
+  { label: 'Rapports', values: { owner: true, manager: true, seller: 'Ses ventes', stock: false } },
+  { label: 'Versements des gérants', values: { owner: true, manager: true, seller: false, stock: false } },
+  { label: 'Gérer l’équipe', values: { owner: true, manager: 'Lecture', seller: false, stock: false } },
+  { label: 'Abonnement', values: { owner: true, manager: false, seller: false, stock: false } },
+];
+
+/* ------------------------------------------------------------------ navigation */
+
+export type NavItem = { id: ScreenId; label: string; href: string };
+
+export const navGroups: { title: string; items: NavItem[] }[] = [
+  {
+    title: 'Principal',
+    items: [
+      { id: 'dash', label: 'Tableau de bord', href: '/app' },
+      { id: 'pos', label: 'Caisse', href: '/app/caisse' },
+      { id: 'sales', label: 'Ventes', href: '/app/ventes' },
+    ],
+  },
+  {
+    title: 'Catalogue',
+    items: [
+      { id: 'products', label: 'Produits', href: '/app/produits' },
+      { id: 'categories', label: 'Catégories', href: '/app/categories' },
+      { id: 'stock', label: 'Stock', href: '/app/stock' },
+      { id: 'suppliers', label: 'Fournisseurs', href: '/app/fournisseurs' },
+    ],
+  },
+  {
+    title: 'Pilotage',
+    items: [
+      { id: 'reports', label: 'Rapports', href: '/app/rapports' },
+      { id: 'deposits', label: 'Versements', href: '/app/versements' },
+      { id: 'team', label: 'Équipe', href: '/app/equipe' },
+    ],
+  },
+  {
+    title: 'Compte',
+    items: [
+      { id: 'subscription', label: 'Abonnement', href: '/app/abonnement' },
+      { id: 'settings', label: 'Paramètres', href: '/app/parametres' },
+      { id: 'support', label: 'Assistance', href: '/app/assistance' },
+    ],
+  },
+];
+
+export const navItems: NavItem[] = [
+  ...navGroups.flatMap((group) => group.items),
+  { id: 'notifications', label: 'Notifications', href: '/app/notifications' },
+];
+
+export const screenHref = Object.fromEntries(navItems.map((item) => [item.id, item.href])) as Record<ScreenId, string>;
+
+/* ------------------------------------------------------------------ payments */
+
+export type PayId = 'cash' | 'mtn' | 'om' | 'transfer';
+
+export const PAYMENTS: { id: PayId; label: string; short: string; color: string }[] = [
+  { id: 'cash', label: 'Espèces', short: 'Espèces', color: '#10b981' },
+  { id: 'mtn', label: 'MTN Mobile Money', short: 'MTN MoMo', color: '#f4b52c' },
+  { id: 'om', label: 'Orange Money', short: 'Orange Money', color: '#f97316' },
+  { id: 'transfer', label: 'Virement', short: 'Virement', color: '#5b6680' },
+];
+
+export const payLabel = (id: PayId) => PAYMENTS.find((pay) => pay.id === id)!.short;
+
+/* ------------------------------------------------------------------ catalogue */
+
+export type AttrType = 'text' | 'number' | 'date' | 'list' | 'multi' | 'yesno' | 'color';
+
+export const ATTR_TYPES: { id: AttrType; label: string }[] = [
+  { id: 'text', label: 'Texte' },
+  { id: 'number', label: 'Nombre' },
+  { id: 'date', label: 'Date' },
+  { id: 'list', label: 'Liste' },
+  { id: 'multi', label: 'Choix multiples' },
+  { id: 'yesno', label: 'Oui / Non' },
+  { id: 'color', label: 'Couleur' },
+];
+
+export type Attribute = {
+  id: string;
+  name: string;
+  type: AttrType;
+  options: string[];
+  /** Each value gets its own stock line, SKU and price (size, colour…). */
+  variant: boolean;
+  required: boolean;
+  hint?: string;
+};
+
+export type CategoryIcon = 'phone' | 'shoe' | 'shirt' | 'drop' | 'tag';
+
+export type Category = {
+  id: string;
+  name: string;
+  code: string;
+  icon: CategoryIcon;
+  tone: Tone;
+  subs: string[];
+  attrs: Attribute[];
+  archived: boolean;
+};
+
+export const SWATCHES: Record<string, string> = {
+  Noir: '#1f2937',
+  Blanc: '#ffffff',
+  Bleu: '#2f5fd0',
+  Vert: '#2e7d32',
+  Marron: '#6d4c41',
+  Beige: '#d8c3a5',
+  Rouge: '#c62828',
+  Rose: '#d81b60',
+  Or: '#e89d12',
+  Gris: '#9ca3af',
+  Multicolore: 'conic-gradient(#e89d12, #c62828, #2f5fd0, #2e7d32, #e89d12)',
+};
+
+const attr = (
+  id: string,
+  name: string,
+  type: AttrType,
+  options: string[] = [],
+  extra: Partial<Pick<Attribute, 'variant' | 'required' | 'hint'>> = {},
+): Attribute => ({ id, name, type, options, variant: false, required: false, ...extra });
+
+const seedCategories: Category[] = [
+  {
+    id: 'tel',
+    name: 'Téléphones',
+    code: 'TEL',
+    icon: 'phone',
+    tone: 'gold',
+    subs: ['Smartphones', 'Accessoires'],
+    archived: false,
+    attrs: [
+      attr('tel_brand', 'Marque', 'list', ['Samsung', 'Tecno', 'Infinix', 'Apple', 'Itel', 'Oraimo'], {
+        required: true,
+      }),
+      attr('tel_model', 'Modèle', 'text', [], { required: true }),
+      attr('tel_mem', 'Mémoire', 'list', ['64 Go', '128 Go', '256 Go'], { variant: true }),
+      attr('tel_color', 'Couleur', 'color', ['Noir', 'Bleu', 'Blanc', 'Vert'], { variant: true }),
+      attr('tel_imei', 'IMEI', 'text', [], { hint: '15 chiffres' }),
+      attr('tel_dual', 'Double SIM', 'yesno'),
+    ],
+  },
+  {
+    id: 'cha',
+    name: 'Chaussures',
+    code: 'CHA',
+    icon: 'shoe',
+    tone: 'navy',
+    subs: ['Homme', 'Femme', 'Enfant'],
+    archived: false,
+    attrs: [
+      attr('cha_brand', 'Marque', 'text'),
+      attr('cha_size', 'Pointure', 'list', ['37', '38', '39', '40', '41', '42', '43', '44', '45'], {
+        variant: true,
+      }),
+      attr('cha_color', 'Couleur', 'color', ['Noir', 'Marron', 'Blanc', 'Beige'], { variant: true }),
+      attr('cha_mat', 'Matière', 'list', ['Cuir', 'Daim', 'Toile', 'Synthétique']),
+    ],
+  },
+  {
+    id: 'vet',
+    name: 'Vêtements',
+    code: 'VET',
+    icon: 'shirt',
+    tone: 'teal',
+    subs: ['Robes', 'Chemises', 'Ensembles'],
+    archived: false,
+    attrs: [
+      attr('vet_size', 'Taille', 'list', ['S', 'M', 'L', 'XL', 'XXL'], { variant: true }),
+      attr('vet_color', 'Couleur', 'color', ['Noir', 'Blanc', 'Bleu', 'Rouge', 'Multicolore'], { variant: true }),
+      attr('vet_mat', 'Matière', 'list', ['Coton', 'Wax', 'Lin', 'Polyester']),
+      attr('vet_occ', 'Occasions', 'multi', ['Quotidien', 'Bureau', 'Cérémonie', 'Week-end']),
+    ],
+  },
+  {
+    id: 'cos',
+    name: 'Cosmétiques',
+    code: 'COS',
+    icon: 'drop',
+    tone: 'rose',
+    subs: ['Soins corps', 'Soins visage', 'Parfums'],
+    archived: false,
+    attrs: [
+      attr('cos_brand', 'Marque', 'text', [], { required: true }),
+      attr('cos_vol', 'Volume (ml)', 'number', [], { required: true }),
+      attr('cos_type', 'Type de produit', 'list', ['Crème', 'Lait', 'Sérum', 'Huile', 'Parfum', 'Savon']),
+      attr('cos_exp', 'Date d’expiration', 'date'),
+      attr('cos_bio', 'Naturel ou bio', 'yesno'),
+    ],
+  },
+];
+
+export type Variant = {
+  id: string;
+  sku: string;
+  /** "128 Go · Noir"; empty for a product without variants. */
+  label: string;
+  price: number;
+  cost: number;
+  stock: number;
+};
+
+export type ProductStatus = 'active' | 'draft' | 'archived';
+export type AttrValue = string | string[] | boolean;
 
 export type Product = {
   id: string;
   name: string;
-  sku: string;
-  category: Category;
-  price: number;
-  cost: number;
-  stock: number;
-  minStock: number;
+  cat: string;
+  sub: string;
+  attrs: Record<string, AttrValue>;
+  min: number;
+  status: ProductStatus;
+  description: string;
+  variants: Variant[];
+  created: number;
 };
 
-export const products: Product[] = [
-  {
-    id: 'p01',
-    name: 'Robe wax évasée',
-    sku: 'RB-104',
-    category: 'Robes',
-    price: 18_000,
-    cost: 10_500,
-    stock: 24,
-    minStock: 8,
-  },
-  {
-    id: 'p02',
-    name: 'Kaba ngondo brodé',
-    sku: 'RB-118',
-    category: 'Robes',
-    price: 25_000,
-    cost: 14_000,
-    stock: 6,
-    minStock: 8,
-  },
-  {
-    id: 'p03',
-    name: 'Robe de soirée satin',
-    sku: 'RB-131',
-    category: 'Robes',
-    price: 35_000,
-    cost: 21_000,
-    stock: 9,
-    minStock: 4,
-  },
-  {
-    id: 'p04',
-    name: 'Ensemble pagne 2 pièces',
-    sku: 'RB-142',
-    category: 'Robes',
-    price: 28_000,
-    cost: 16_000,
-    stock: 12,
-    minStock: 5,
-  },
-  {
-    id: 'p05',
-    name: 'Top en lin',
-    sku: 'TP-210',
-    category: 'Tops',
-    price: 9_500,
-    cost: 5_000,
-    stock: 31,
-    minStock: 10,
-  },
-  {
-    id: 'p06',
-    name: 'Blouse en pagne',
-    sku: 'TP-224',
-    category: 'Tops',
-    price: 12_000,
-    cost: 6_500,
-    stock: 3,
-    minStock: 8,
-  },
-  {
-    id: 'p07',
-    name: 'Crop top côtelé',
-    sku: 'TP-237',
-    category: 'Tops',
-    price: 6_500,
-    cost: 3_200,
-    stock: 0,
-    minStock: 6,
-  },
-  {
-    id: 'p08',
-    name: 'Pantalon palazzo',
-    sku: 'PT-305',
-    category: 'Pantalons',
-    price: 15_000,
-    cost: 8_000,
-    stock: 14,
-    minStock: 6,
-  },
-  {
-    id: 'p09',
-    name: 'Jean taille haute',
-    sku: 'PT-312',
-    category: 'Pantalons',
-    price: 16_500,
-    cost: 9_500,
-    stock: 11,
-    minStock: 6,
-  },
-  {
-    id: 'p10',
-    name: 'Jupe crayon',
-    sku: 'JP-401',
-    category: 'Jupes',
-    price: 11_000,
-    cost: 6_000,
-    stock: 17,
-    minStock: 6,
-  },
-  {
-    id: 'p11',
-    name: 'Jupe plissée midi',
-    sku: 'JP-415',
-    category: 'Jupes',
-    price: 13_500,
-    cost: 7_000,
-    stock: 5,
-    minStock: 6,
-  },
-  {
-    id: 'p12',
-    name: 'Sac à main en cuir',
-    sku: 'AC-502',
-    category: 'Accessoires',
-    price: 22_000,
-    cost: 12_500,
-    stock: 8,
-    minStock: 4,
-  },
-  {
-    id: 'p13',
-    name: 'Foulard en soie',
-    sku: 'AC-517',
-    category: 'Accessoires',
-    price: 5_000,
-    cost: 2_200,
-    stock: 40,
-    minStock: 10,
-  },
-  {
-    id: 'p14',
-    name: 'Boucles d’oreilles dorées',
-    sku: 'AC-523',
-    category: 'Accessoires',
-    price: 3_500,
-    cost: 1_200,
-    stock: 52,
-    minStock: 15,
-  },
-  {
-    id: 'p15',
-    name: 'Sandales tressées',
-    sku: 'CH-601',
-    category: 'Chaussures',
-    price: 14_000,
-    cost: 7_500,
-    stock: 0,
-    minStock: 5,
-  },
-  {
-    id: 'p16',
-    name: 'Escarpins vernis',
-    sku: 'CH-614',
-    category: 'Chaussures',
-    price: 19_500,
-    cost: 11_000,
-    stock: 7,
-    minStock: 4,
-  },
+const v = (id: string, sku: string, label: string, price: number, cost: number, stock: number): Variant => ({
+  id,
+  sku,
+  label,
+  price,
+  cost,
+  stock,
+});
+
+const product = (
+  id: string,
+  name: string,
+  cat: string,
+  sub: string,
+  attrs: Record<string, AttrValue>,
+  min: number,
+  variants: Variant[],
+  ageDays = 60,
+): Product => ({
+  id,
+  name,
+  cat,
+  sub,
+  attrs,
+  min,
+  status: 'active',
+  description: '',
+  variants,
+  created: TODAY_START - ageDays * DAY,
+});
+
+const seedProducts: Product[] = [
+  product(
+    'p1',
+    'Samsung Galaxy A15',
+    'tel',
+    'Smartphones',
+    { tel_brand: 'Samsung', tel_model: 'Galaxy A15', tel_dual: true },
+    3,
+    [
+      v('p1a', 'TEL-SAMA15-128-NOI', '128 Go · Noir', 115_000, 98_000, 6),
+      v('p1b', 'TEL-SAMA15-128-BLE', '128 Go · Bleu', 115_000, 98_000, 3),
+    ],
+  ),
+  product(
+    'p2',
+    'Tecno Spark 20 Pro',
+    'tel',
+    'Smartphones',
+    { tel_brand: 'Tecno', tel_model: 'Spark 20 Pro', tel_dual: true },
+    3,
+    [v('p2a', 'TEL-TECS20-256-NOI', '256 Go · Noir', 95_000, 80_000, 8)],
+  ),
+  product(
+    'p3',
+    'Infinix Hot 40i',
+    'tel',
+    'Smartphones',
+    { tel_brand: 'Infinix', tel_model: 'Hot 40i', tel_dual: true },
+    3,
+    [v('p3a', 'TEL-INFH40-128-VER', '128 Go · Vert', 68_000, 57_000, 2)],
+  ),
+  product(
+    'p4',
+    'iPhone 11 reconditionné',
+    'tel',
+    'Smartphones',
+    { tel_brand: 'Apple', tel_model: 'iPhone 11', tel_dual: false },
+    1,
+    [v('p4a', 'TEL-IPH11-64-BLA', '64 Go · Blanc', 185_000, 158_000, 0)],
+  ),
+  product(
+    'p5',
+    'Écouteurs sans fil FreePods',
+    'tel',
+    'Accessoires',
+    { tel_brand: 'Oraimo', tel_model: 'FreePods 4' },
+    5,
+    [v('p5a', 'TEL-ORAFP4', '', 15_000, 9_500, 24)],
+  ),
+  product(
+    'p6',
+    'Chargeur rapide 25 W USB-C',
+    'tel',
+    'Accessoires',
+    { tel_brand: 'Samsung', tel_model: 'EP-T2510' },
+    10,
+    [v('p6a', 'TEL-CHG25W', '', 6_500, 3_500, 31)],
+  ),
+  product('p7', 'Baskets cuir blanches', 'cha', 'Homme', { cha_brand: 'Mboa Street', cha_mat: 'Cuir' }, 2, [
+    v('p7a', 'CHA-BASK-40-BLA', '40 · Blanc', 25_000, 14_000, 3),
+    v('p7b', 'CHA-BASK-41-BLA', '41 · Blanc', 25_000, 14_000, 5),
+    v('p7c', 'CHA-BASK-42-BLA', '42 · Blanc', 25_000, 14_000, 2),
+    v('p7d', 'CHA-BASK-43-BLA', '43 · Blanc', 25_000, 14_000, 0),
+  ]),
+  product('p8', 'Sandales cuir homme', 'cha', 'Homme', { cha_brand: 'Artisan Foumban', cha_mat: 'Cuir' }, 4, [
+    v('p8a', 'CHA-SAND-MAR', '', 12_000, 6_500, 14),
+  ]),
+  product('p9', 'Escarpins vernis', 'cha', 'Femme', { cha_brand: 'Élégance', cha_mat: 'Synthétique' }, 3, [
+    v('p9a', 'CHA-ESCA-39-NOI', '39 · Noir', 18_000, 10_000, 2),
+    v('p9b', 'CHA-ESCA-40-NOI', '40 · Noir', 18_000, 10_000, 3),
+  ]),
+  product('p10', 'Robe pagne wax', 'vet', 'Robes', { vet_mat: 'Wax', vet_occ: ['Cérémonie', 'Week-end'] }, 2, [
+    v('p10a', 'VET-ROBW-M-MUL', 'M · Multicolore', 22_000, 12_000, 5),
+    v('p10b', 'VET-ROBW-L-MUL', 'L · Multicolore', 22_000, 12_000, 3),
+  ]),
+  product('p11', 'Chemise lin homme', 'vet', 'Chemises', { vet_mat: 'Lin', vet_occ: ['Bureau'] }, 4, [
+    v('p11a', 'VET-CHLN-BLA', '', 15_000, 8_000, 11),
+  ]),
+  product(
+    'p12',
+    'Ensemble kaba brodé',
+    'vet',
+    'Ensembles',
+    { vet_mat: 'Coton', vet_occ: ['Quotidien', 'Cérémonie'] },
+    2,
+    [v('p12a', 'VET-KABA', '', 30_000, 17_000, 6)],
+  ),
+  product(
+    'p13',
+    'Lait corporel karité 400 ml',
+    'cos',
+    'Soins corps',
+    { cos_brand: 'Karité d’Or', cos_vol: '400', cos_type: 'Lait', cos_bio: true },
+    10,
+    [v('p13a', 'COS-LAKA-400', '', 4_500, 2_600, 38)],
+  ),
+  product(
+    'p14',
+    'Sérum vitamine C 30 ml',
+    'cos',
+    'Soins visage',
+    { cos_brand: 'Belle Peau', cos_vol: '30', cos_type: 'Sérum', cos_exp: '2027-08-31' },
+    5,
+    [v('p14a', 'COS-SERC-30', '', 9_500, 5_200, 7)],
+  ),
+  product(
+    'p15',
+    'Parfum Oud Royal 100 ml',
+    'cos',
+    'Parfums',
+    { cos_brand: 'Maison Sawa', cos_vol: '100', cos_type: 'Parfum' },
+    3,
+    [v('p15a', 'COS-OUDR-100', '', 16_000, 9_000, 1)],
+  ),
+  product(
+    'p16',
+    'Huile de coco vierge 250 ml',
+    'cos',
+    'Soins corps',
+    { cos_brand: 'Kribi Naturel', cos_vol: '250', cos_type: 'Huile', cos_bio: true },
+    8,
+    [v('p16a', 'COS-HCOC-250', '', 3_000, 1_600, 22)],
+  ),
 ];
-
-export type StockStatus = 'ok' | 'low' | 'out';
-
-export const stockStatus = (product: Pick<Product, 'stock' | 'minStock'>): StockStatus =>
-  product.stock === 0 ? 'out' : product.stock <= product.minStock ? 'low' : 'ok';
-
-export const marginRate = (product: Pick<Product, 'price' | 'cost'>) =>
-  product.price === 0 ? 0 : Math.round(((product.price - product.cost) / product.price) * 100);
-
-export const stockAlerts = products
-  .filter((product) => stockStatus(product) !== 'ok')
-  .sort((a, b) => a.stock - b.stock || a.name.localeCompare(b.name));
 
 /* ------------------------------------------------------------------ team */
 
-export type RoleName = 'Propriétaire' | 'Gérant' | 'Vendeur' | 'Magasinier';
 export type MemberStatus = 'active' | 'invited' | 'suspended';
 
 export type Member = {
   id: string;
   name: string;
+  role: RoleId;
   phone: string;
-  role: RoleName;
   shop: Shop | 'Toutes';
   status: MemberStatus;
   lastSeen: number | null;
-  salesToday: number;
 };
 
-export const team: Member[] = [
+const seedTeam: Member[] = [
   {
-    id: 'm1',
-    name: 'Awa Ngono',
-    phone: '+237 677 41 22 90',
-    role: 'Propriétaire',
+    id: 'u1',
+    name: 'Mireille Ngo Bella',
+    role: 'owner',
+    phone: '+237 699 41 22 08',
     shop: 'Toutes',
     status: 'active',
-    lastSeen: NOW - 2 * 60_000,
-    salesToday: 0,
+    lastSeen: NOW - 5 * MINUTE,
   },
   {
-    id: 'm2',
-    name: 'Brice Tchoumi',
-    phone: '+237 699 12 45 78',
-    role: 'Gérant',
+    id: 'u2',
+    name: 'Patrick Essomba',
+    role: 'manager',
+    phone: '+237 677 10 54 31',
     shop: 'Akwa',
     status: 'active',
-    lastSeen: NOW - 14 * 60_000,
-    salesToday: 4,
+    lastSeen: NOW - 2 * HOUR,
   },
   {
-    id: 'm3',
-    name: 'Mireille Essomba',
-    phone: '+237 655 30 81 17',
-    role: 'Gérant',
+    id: 'u3',
+    name: 'Brenda Nkeng',
+    role: 'manager',
+    phone: '+237 690 22 18 74',
     shop: 'Bonapriso',
     status: 'active',
-    lastSeen: NOW - 41 * 60_000,
-    salesToday: 3,
+    lastSeen: NOW - 35 * MINUTE,
   },
   {
-    id: 'm4',
-    name: 'Clarisse Mbarga',
-    phone: '+237 670 58 93 02',
-    role: 'Vendeur',
+    id: 'u4',
+    name: 'Junior Mbarga',
+    role: 'seller',
+    phone: '+237 655 82 19 47',
     shop: 'Akwa',
     status: 'active',
-    lastSeen: NOW - 6 * 60_000,
-    salesToday: 7,
+    lastSeen: NOW - 18 * MINUTE,
   },
   {
-    id: 'm5',
-    name: 'Junior Kamga',
-    phone: '+237 691 07 64 35',
-    role: 'Vendeur',
+    id: 'u5',
+    name: 'Aïcha Bouba',
+    role: 'seller',
+    phone: '+237 694 37 60 12',
     shop: 'Bonapriso',
     status: 'active',
-    lastSeen: NOW - 25 * 60_000,
-    salesToday: 5,
+    lastSeen: NOW - 50 * MINUTE,
   },
   {
-    id: 'm6',
-    name: 'Ibrahim Bello',
-    phone: '+237 679 88 21 40',
-    role: 'Magasinier',
-    shop: 'Akwa',
+    id: 'u6',
+    name: 'Serge Tchoumi',
+    role: 'stock',
+    phone: '+237 651 08 77 90',
+    shop: 'Toutes',
     status: 'active',
-    lastSeen: NOW - 3 * HOUR,
-    salesToday: 0,
+    lastSeen: NOW - 26 * HOUR,
   },
   {
-    id: 'm7',
+    id: 'u7',
     name: 'Estelle Fotso',
-    phone: '+237 656 72 19 63',
-    role: 'Vendeur',
+    role: 'seller',
+    phone: '+237 678 51 30 26',
     shop: 'Akwa',
     status: 'invited',
     lastSeen: null,
-    salesToday: 0,
   },
 ];
 
-export const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('');
-
-/* ------------------------------------------------------------------ daily activity */
-
-export type Totals = { revenue: number; sales: number; profit: number };
-
-const weekdayFactor = [0.55, 0.85, 0.9, 0.95, 1.05, 1.15, 1.35];
-const hourWeights = [0.4, 0.6, 0.8, 0.9, 1.1, 1.2, 1, 0.9, 1, 1.2, 1.3, 1.1, 0.6];
-const OPEN_HOUR = 8;
-const NOW_HOUR = 14;
-
-const dayRand = seeded(2026);
-
-function dayTotals(start: number, daysAgo: number): Totals {
-  const weekday = new Date(start + HOUR).getUTCDay();
-  const trend = 1 + (60 - daysAgo) * 0.003;
-  const revenue = roundTo(310_000 * weekdayFactor[weekday] * (0.8 + 0.4 * dayRand()) * trend, 500);
-  const sales = Math.max(1, Math.round(revenue / (15_500 + dayRand() * 4_000)));
-  const profit = roundTo(revenue * (0.38 + dayRand() * 0.08), 500);
-  return { revenue, sales, profit };
-}
-
-export type DayPoint = Totals & { start: number };
-
-/** Complete days, oldest first: index 59 is yesterday. */
-export const dailySeries: DayPoint[] = Array.from({ length: 60 }, (_, index) => {
-  const daysAgo = 60 - index;
-  const start = TODAY_START - daysAgo * DAY;
-  return { start, ...dayTotals(start, daysAgo) };
-});
-
-function splitByHour(day: Totals, hours: number): Totals[] {
-  const total = hourWeights.reduce((sum, weight) => sum + weight, 0);
-  return hourWeights.slice(0, hours).map((weight) => ({
-    revenue: roundTo((day.revenue * weight) / total, 500),
-    sales: Math.max(0, Math.round((day.sales * weight) / total)),
-    profit: roundTo((day.profit * weight) / total, 500),
-  }));
-}
-
-const yesterday = dailySeries[dailySeries.length - 1];
-const todayForecast = dayTotals(TODAY_START, 0);
-const hoursOpenToday = NOW_HOUR - OPEN_HOUR + 1;
-
-export const hourlyToday = splitByHour(todayForecast, hoursOpenToday);
-const hourlyYesterday = splitByHour(yesterday, hoursOpenToday);
-
-const sumTotals = (list: Totals[]): Totals =>
-  list.reduce(
-    (acc, item) => ({
-      revenue: acc.revenue + item.revenue,
-      sales: acc.sales + item.sales,
-      profit: acc.profit + item.profit,
-    }),
-    {
-      revenue: 0,
-      sales: 0,
-      profit: 0,
-    },
-  );
-
-export type Period = 'today' | '7d' | '30d';
-
-export const periods: { id: Period; label: string; compare: string; short: string }[] = [
-  { id: 'today', label: 'Aujourd’hui', compare: 'hier à la même heure', short: 'vs hier' },
-  { id: '7d', label: '7 jours', compare: 'les 7 jours précédents', short: 'vs 7 j. précédents' },
-  { id: '30d', label: '30 jours', compare: 'les 30 jours précédents', short: 'vs 30 j. précédents' },
-];
-
-export type ChartPoint = { label: string; detail: string; value: number; previous: number };
-
-export type PeriodData = { current: Totals; previous: Totals; points: ChartPoint[] };
-
-export function periodData(period: Period): PeriodData {
-  if (period === 'today') {
-    return {
-      current: sumTotals(hourlyToday),
-      previous: sumTotals(hourlyYesterday),
-      points: hourlyToday.map((hour, index) => ({
-        label: `${OPEN_HOUR + index}h`,
-        detail: `Aujourd’hui, ${OPEN_HOUR + index}h – ${OPEN_HOUR + index + 1}h`,
-        value: hour.revenue,
-        previous: hourlyYesterday[index].revenue,
-      })),
-    };
-  }
-  const length = period === '7d' ? 7 : 30;
-  const current = dailySeries.slice(-length);
-  const previous = dailySeries.slice(-2 * length, -length);
-  return {
-    current: sumTotals(current),
-    previous: sumTotals(previous),
-    points: current.map((day, index) => ({
-      label: period === '7d' ? capitalize(weekdayDay.format(day.start)) : formatDayMonth(day.start),
-      detail: formatFullDate(day.start),
-      value: day.revenue,
-      previous: previous[index].revenue,
-    })),
-  };
-}
-
 /* ------------------------------------------------------------------ sales */
 
-export const paymentMethods = ['Espèces', 'MTN MoMo', 'Orange Money'] as const;
-export type PaymentMethod = (typeof paymentMethods)[number];
-export type SaleStatus = 'paid' | 'pending' | 'cancelled';
-
-export type SaleLine = { productId: string; name: string; quantity: number; unitPrice: number };
+export type SaleLine = {
+  pid: string;
+  vid: string;
+  name: string;
+  label: string;
+  cat: string;
+  qty: number;
+  price: number;
+  cost: number;
+  returned: number;
+};
 
 export type Sale = {
   id: string;
-  date: number;
+  at: number;
+  shop: Shop;
+  seller: string;
   customer: string;
   lines: SaleLine[];
-  total: number;
-  method: PaymentMethod;
-  status: SaleStatus;
-  seller: string;
-  shop: Shop;
+  discount: number;
+  pay: PayId;
+  /** Cash handed over by the customer, to compute change. */
+  received: number;
+  reference: string;
+  cancelled: boolean;
 };
 
 const customers = [
-  'Brenda Nkeng',
-  'Chantal Owona',
-  'Diane Ateba',
-  'Estelle Nana',
-  'Flore Abena',
-  'Grace Tabi',
-  'Hortense Manga',
-  'Laure Ekambi',
-  'Mariam Aboubakar',
-  'Nadège Fouda',
-  'Paule Ndzana',
-  'Rose Moukoko',
-  'Sandrine Biyong',
   'Vanessa Kouam',
+  'Chantal Owona',
+  'Estelle Nana',
+  'Brice Kamdem',
+  'Yannick Eto’o',
+  'Clarisse Ndongo',
+  'Paul Biyong',
+  'Rachel Ewane',
 ];
 
-const sellersByShop: Record<Shop, string[]> = {
-  Akwa: ['Clarisse Mbarga', 'Brice Tchoumi'],
-  Bonapriso: ['Junior Kamga', 'Mireille Essomba'],
+const sellersByShop: Record<Shop, (readonly [string, number])[]> = {
+  Akwa: [
+    ['Junior Mbarga', 0.5],
+    ['Patrick Essomba', 0.3],
+    ['Mireille Ngo Bella', 0.2],
+  ],
+  Bonapriso: [
+    ['Aïcha Bouba', 0.55],
+    ['Brenda Nkeng', 0.35],
+    ['Mireille Ngo Bella', 0.1],
+  ],
 };
 
-export const saleTotal = (lines: Pick<SaleLine, 'quantity' | 'unitPrice'>[]) =>
-  lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+function generateSales(products: Product[]): Sale[] {
+  const rand = seeded(20261023);
+  const items = products.flatMap((p) =>
+    p.variants.map((variant) => {
+      const weight = p.cat === 'tel' ? (p.sub === 'Accessoires' ? 2.2 : 0.7) : p.cat === 'cos' ? 2.4 : 1.1;
+      return [{ p, variant }, weight] as const;
+    }),
+  );
+  const pays = [
+    ['cash', 0.48],
+    ['mtn', 0.3],
+    ['om', 0.18],
+    ['transfer', 0.04],
+  ] as const;
+  const out: Omit<Sale, 'id'>[] = [];
 
-const saleRand = seeded(237);
+  for (let d = 59; d >= 0; d--) {
+    const dayStart = TODAY_START - d * DAY;
+    const dow = new Date(dayStart + 12 * HOUR).getUTCDay();
+    for (const shop of SHOPS) {
+      let count = Math.round(3 + rand() * 4 + (dow === 6 ? 2 : 0) - (dow === 0 ? 2 : 0) + (d < 30 ? 1 : 0));
+      let lastHour = 19.5;
+      if (d === 0) {
+        lastHour = (NOW - TODAY_START) / HOUR;
+        count = Math.max(2, Math.round((count * (lastHour - 8)) / 11.5));
+      }
+      const times = Array.from({ length: count }, () => dayStart + (8 + rand() * (lastHour - 8)) * HOUR).sort(
+        (a, b) => a - b,
+      );
+      for (const at of times) {
+        const lineCount = rand() < 0.74 ? 1 : rand() < 0.85 ? 2 : 3;
+        const lines: SaleLine[] = [];
+        for (let i = 0; i < lineCount; i++) {
+          const { p, variant } = weighted(rand, items);
+          const existing = lines.find((line) => line.vid === variant.id);
+          if (existing) {
+            existing.qty++;
+            continue;
+          }
+          lines.push({
+            pid: p.id,
+            vid: variant.id,
+            name: p.name,
+            label: variant.label,
+            cat: p.cat,
+            qty: p.cat === 'cos' && rand() < 0.3 ? 2 : 1,
+            price: variant.price,
+            cost: variant.cost,
+            returned: 0,
+          });
+        }
+        const gross = lines.reduce((sum, line) => sum + line.price * line.qty, 0);
+        const discount = rand() < 0.1 ? roundTo(gross * 0.05, 500) : 0;
+        const cancelled = rand() < 0.02;
+        if (!cancelled && rand() < 0.015) lines[0].returned = lines[0].qty;
+        const pay = weighted(rand, pays);
+        out.push({
+          at: Math.min(at, NOW - 4 * MINUTE),
+          shop,
+          seller: weighted(rand, sellersByShop[shop]),
+          customer: rand() < 0.35 ? customers[Math.floor(rand() * customers.length)] : '',
+          lines,
+          discount,
+          pay,
+          received: 0,
+          reference: pay === 'mtn' || pay === 'om' ? `MP${Math.floor(rand() * 9e9 + 1e9)}` : '',
+          cancelled,
+        });
+      }
+    }
+  }
 
-/** Opening hours run 8h30 – 19h45; today stops at the current time. */
-const saleTimes = Array.from({ length: 8 }, (_, daysAgo) => daysAgo)
-  .flatMap((daysAgo) => {
-    const open = TODAY_START - daysAgo * DAY + 8.5 * HOUR;
-    const close = daysAgo === 0 ? NOW - 20 * 60_000 : open + 11.25 * HOUR;
-    const count = daysAgo === 0 ? sumTotals(hourlyToday).sales : 5 + Math.floor(saleRand() * 3);
-    return Array.from({ length: count }, () => open + Math.floor((saleRand() * (close - open)) / 60_000) * 60_000);
-  })
-  .sort((a, b) => b - a);
+  out.sort((a, b) => a.at - b.at);
+  return out.map((sale, index) => ({ ...sale, id: `V-${10_400 + index}` })).reverse();
+}
 
-export const sales: Sale[] = saleTimes.map((date, index) => {
-  const lineCount = saleRand() < 0.6 ? 1 : saleRand() < 0.75 ? 2 : 3;
-  const chosen = new Set<Product>();
-  while (chosen.size < lineCount) chosen.add(pick(saleRand, products));
-  const lines = [...chosen].map((product) => ({
-    productId: product.id,
-    name: product.name,
-    quantity: saleRand() < 0.8 ? 1 : 2,
-    unitPrice: product.price,
-  }));
-  const shop: Shop = saleRand() < 0.58 ? 'Akwa' : 'Bonapriso';
-  const methodRoll = saleRand();
-  const statusRoll = saleRand();
-  return {
-    id: `V-${String(1248 - index).padStart(6, '0')}`,
-    date,
-    customer: saleRand() < 0.25 ? 'Client de passage' : pick(saleRand, customers),
-    lines,
-    total: saleTotal(lines),
-    method: methodRoll < 0.5 ? 'Espèces' : methodRoll < 0.8 ? 'MTN MoMo' : 'Orange Money',
-    status: index === 1 ? 'pending' : statusRoll < 0.05 ? 'cancelled' : statusRoll < 0.1 ? 'pending' : 'paid',
-    seller: pick(saleRand, sellersByShop[shop]),
-    shop,
-  };
-});
+export const saleGross = (sale: Sale) => sale.lines.reduce((sum, line) => sum + line.price * line.qty, 0);
+
+/** What the customer finally paid, after discount and returns. */
+export function saleNet(sale: Sale) {
+  if (sale.cancelled) return 0;
+  const gross = saleGross(sale);
+  const kept = sale.lines.reduce((sum, line) => sum + line.price * (line.qty - line.returned), 0);
+  return gross ? Math.round(kept - (sale.discount * kept) / gross) : 0;
+}
+
+export const saleCost = (sale: Sale) =>
+  sale.cancelled ? 0 : sale.lines.reduce((sum, line) => sum + line.cost * (line.qty - line.returned), 0);
+
+export const saleItems = (sale: Sale) => sale.lines.reduce((sum, line) => sum + line.qty, 0);
+
+export type SaleState = 'ok' | 'partial' | 'refunded' | 'cancelled';
+
+export function saleState(sale: Sale): SaleState {
+  if (sale.cancelled) return 'cancelled';
+  const returned = sale.lines.reduce((sum, line) => sum + line.returned, 0);
+  if (!returned) return 'ok';
+  return returned >= saleItems(sale) ? 'refunded' : 'partial';
+}
 
 /* ------------------------------------------------------------------ deposits */
 
 export type DepositStatus = 'pending' | 'verified' | 'flagged';
-export const depositMethods = ['Espèces', 'MTN MoMo', 'Orange Money', 'Dépôt bancaire'] as const;
-export type DepositMethod = (typeof depositMethods)[number];
 
 export type Deposit = {
   id: string;
@@ -567,88 +850,467 @@ export type Deposit = {
   manager: string;
   expected: number;
   deposited: number;
-  method: DepositMethod;
   depositedAt: number;
+  method: string;
   status: DepositStatus;
-  note?: string;
+  note: string;
 };
 
-const managers: Record<Shop, string> = { Akwa: 'Brice Tchoumi', Bonapriso: 'Mireille Essomba' };
-const shopShare: Record<Shop, number> = { Akwa: 0.58, Bonapriso: 0.42 };
-const knownGaps: Record<string, number> = { '1-Akwa': -15_000, '4-Akwa': -5_000, '7-Bonapriso': -2_500 };
+const managers: Record<Shop, string> = { Akwa: 'Patrick Essomba', Bonapriso: 'Brenda Nkeng' };
 
-/** Latest first: cash takings of each shop, handed over by its manager the same evening. */
-export const deposits: Deposit[] = Array.from({ length: 10 }, (_, index) => index + 1).flatMap((daysAgo) => {
-  const day = dailySeries[dailySeries.length - daysAgo];
-  return business.shops.map((shop) => {
-    const expected = roundTo(day.revenue * 0.52 * shopShare[shop], 500);
-    const gap = knownGaps[`${daysAgo}-${shop}`] ?? 0;
-    return {
-      id: `VS-${daysAgo}-${shop}`,
-      day: day.start,
-      shop,
-      manager: managers[shop],
-      expected,
-      deposited: expected + gap,
-      method: shop === 'Akwa' ? 'Espèces' : daysAgo % 3 === 0 ? 'Dépôt bancaire' : 'MTN MoMo',
-      depositedAt: day.start + 19 * HOUR + (shop === 'Akwa' ? 35 : 52) * 60_000,
-      status: daysAgo === 1 ? 'pending' : gap !== 0 && daysAgo === 4 ? 'flagged' : 'verified',
-      note:
-        daysAgo === 4 && shop === 'Akwa' ? 'Monnaie rendue en trop sur une vente, à retenir sur la paie.' : undefined,
-    } satisfies Deposit;
-  });
-});
-
-/* ------------------------------------------------------------------ navigation & alerts */
-
-export type NavIcon = 'overview' | 'sales' | 'products' | 'deposits' | 'team' | 'settings';
-
-export const appNav: { label: string; href: string; icon: NavIcon; badge?: number }[] = [
-  { label: 'Tableau de bord', href: '/app', icon: 'overview' },
-  { label: 'Ventes', href: '/app/ventes', icon: 'sales' },
-  { label: 'Produits et stock', href: '/app/produits', icon: 'products', badge: stockAlerts.length },
-  {
-    label: 'Versements',
-    href: '/app/versements',
-    icon: 'deposits',
-    badge: deposits.filter((deposit) => deposit.status === 'pending').length,
+const knownGaps: Record<string, { gap: number; note?: string; status?: DepositStatus }> = {
+  '1-Akwa': { gap: -15_000 },
+  '4-Akwa': {
+    gap: -5_000,
+    status: 'flagged',
+    note: 'Patrick dit avoir rendu la monnaie sur un billet de 10 000. À retenir sur sa prochaine paie.',
   },
-  { label: 'Équipe', href: '/app/equipe', icon: 'team' },
-  { label: 'Paramètres', href: '/app/parametres', icon: 'settings' },
+  '7-Bonapriso': { gap: -2_500 },
+};
+
+function buildDeposits(sales: Sale[]): Deposit[] {
+  const out: Deposit[] = [];
+  for (let d = 1; d <= 10; d++) {
+    const day = TODAY_START - d * DAY;
+    for (const shop of SHOPS) {
+      const expected = sales
+        .filter((sale) => sale.shop === shop && sale.pay === 'cash' && sale.at >= day && sale.at < day + DAY)
+        .reduce((sum, sale) => sum + saleNet(sale), 0);
+      const known = knownGaps[`${d}-${shop}`];
+      out.push({
+        id: `D-${d}-${shop}`,
+        day,
+        shop,
+        manager: managers[shop],
+        expected,
+        deposited: expected + (known?.gap ?? 0),
+        depositedAt: day + (shop === 'Akwa' ? 19.58 : 19.87) * HOUR,
+        method: shop === 'Akwa' ? 'Espèces' : 'MTN MoMo',
+        status: d === 1 ? 'pending' : (known?.status ?? 'verified'),
+        note: known?.note ?? '',
+      });
+    }
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ stock, suppliers */
+
+export type MoveType = 'reception' | 'adjust' | 'loss' | 'return' | 'inventory';
+
+export const MOVE_LABELS: Record<MoveType, string> = {
+  reception: 'Réception',
+  adjust: 'Ajustement',
+  loss: 'Casse ou perte',
+  return: 'Retour client',
+  inventory: 'Inventaire',
+};
+
+export type Move = { id: string; at: number; type: MoveType; item: string; qty: number; user: string; note: string };
+
+const seedMoves: Move[] = [
+  {
+    id: 'm6',
+    at: NOW - 55 * MINUTE,
+    type: 'reception',
+    item: 'Lait corporel karité 400 ml',
+    qty: 12,
+    user: 'Serge Tchoumi',
+    note: 'Réception R-0231',
+  },
+  {
+    id: 'm5',
+    at: NOW - 2 * HOUR,
+    type: 'loss',
+    item: 'Escarpins vernis · 39 · Noir',
+    qty: -1,
+    user: 'Patrick Essomba',
+    note: 'Talon cassé',
+  },
+  {
+    id: 'm4',
+    at: NOW - DAY,
+    type: 'reception',
+    item: 'Samsung Galaxy A15 · 128 Go · Bleu',
+    qty: 4,
+    user: 'Serge Tchoumi',
+    note: 'Réception R-0230',
+  },
+  {
+    id: 'm3',
+    at: NOW - 2 * DAY,
+    type: 'return',
+    item: 'Chargeur rapide 25 W USB-C',
+    qty: 1,
+    user: 'Aïcha Bouba',
+    note: 'Retour client',
+  },
+  {
+    id: 'm2',
+    at: NOW - 3 * DAY,
+    type: 'inventory',
+    item: 'Huile de coco vierge 250 ml',
+    qty: -2,
+    user: 'Serge Tchoumi',
+    note: 'Écart d’inventaire',
+  },
+  {
+    id: 'm1',
+    at: NOW - 4 * DAY,
+    type: 'reception',
+    item: 'Robe pagne wax · M · Multicolore',
+    qty: 6,
+    user: 'Serge Tchoumi',
+    note: 'Réception R-0229',
+  },
 ];
 
-export type Notice = {
+export type Supplier = {
   id: string;
-  tone: 'danger' | 'warning' | 'success';
-  title: string;
-  body: string;
-  href: string;
-  at: number;
+  name: string;
+  contact: string;
+  phone: string;
+  city: string;
+  category: string;
+  total: number;
 };
 
-export const notices: Notice[] = [
+const seedSuppliers: Supplier[] = [
+  {
+    id: 's1',
+    name: 'Tech Import Akwa',
+    contact: 'Hervé Kamga',
+    phone: '+237 670 11 23 45',
+    city: 'Douala, Akwa',
+    category: 'Téléphones',
+    total: 2_840_000,
+  },
+  {
+    id: 's2',
+    name: 'Ets Fotso & Fils',
+    contact: 'Brice Fotso',
+    phone: '+237 696 22 04 18',
+    city: 'Douala, Marché Central',
+    category: 'Chaussures',
+    total: 910_000,
+  },
+  {
+    id: 's3',
+    name: 'Mboa Textiles',
+    contact: 'Clarisse Atangana',
+    phone: '+237 675 63 81 02',
+    city: 'Yaoundé, Mokolo',
+    category: 'Vêtements',
+    total: 640_000,
+  },
+  {
+    id: 's4',
+    name: 'Cosmétiques du Littoral',
+    contact: 'Nadège Ewane',
+    phone: '+237 658 40 29 33',
+    city: 'Douala, Bonabéri',
+    category: 'Cosmétiques',
+    total: 385_000,
+  },
+];
+
+export type Reception = {
+  id: string;
+  at: number;
+  supplier: string;
+  reference: string;
+  lines: number;
+  qty: number;
+  total: number;
+  user: string;
+};
+
+const seedReceptions: Reception[] = [
+  {
+    id: 'R-0231',
+    at: NOW - 55 * MINUTE,
+    supplier: 'Cosmétiques du Littoral',
+    reference: 'BL-7781',
+    lines: 1,
+    qty: 12,
+    total: 31_200,
+    user: 'Serge Tchoumi',
+  },
+  {
+    id: 'R-0230',
+    at: NOW - DAY,
+    supplier: 'Tech Import Akwa',
+    reference: 'FA-2026-332',
+    lines: 1,
+    qty: 4,
+    total: 392_000,
+    user: 'Serge Tchoumi',
+  },
+  {
+    id: 'R-0229',
+    at: NOW - 4 * DAY,
+    supplier: 'Mboa Textiles',
+    reference: 'BL-0912',
+    lines: 2,
+    qty: 9,
+    total: 108_000,
+    user: 'Serge Tchoumi',
+  },
+  {
+    id: 'R-0228',
+    at: NOW - 9 * DAY,
+    supplier: 'Ets Fotso & Fils',
+    reference: 'BL-5530',
+    lines: 4,
+    qty: 16,
+    total: 224_000,
+    user: 'Patrick Essomba',
+  },
+];
+
+/* ------------------------------------------------------------------ account */
+
+export type PlanId = 'demarrage' | 'business' | 'entreprise';
+export type BillingCycle = 'monthly' | 'yearly';
+
+/** Quotas per plan; `null` means unlimited. */
+export const PLAN_LIMITS: Record<PlanId, { shops: number | null; users: number | null; products: number | null }> = {
+  demarrage: { shops: 1, users: 2, products: 500 },
+  business: { shops: 3, users: 10, products: null },
+  entreprise: { shops: null, users: null, products: null },
+};
+
+export type Invoice = {
+  id: string;
+  at: number;
+  plan: string;
+  amount: number;
+  method: string;
+  status: 'paid' | 'failed';
+};
+
+const seedInvoices: Invoice[] = [
+  {
+    id: 'F-2026-1004',
+    at: TODAY_START - 19 * DAY,
+    plan: 'Business',
+    amount: 12_000,
+    method: 'MTN MoMo',
+    status: 'paid',
+  },
+  {
+    id: 'F-2026-0904',
+    at: TODAY_START - 49 * DAY,
+    plan: 'Business',
+    amount: 12_000,
+    method: 'Orange Money',
+    status: 'paid',
+  },
+  {
+    id: 'F-2026-0804',
+    at: TODAY_START - 80 * DAY,
+    plan: 'Démarrage',
+    amount: 5_000,
+    method: 'MTN MoMo',
+    status: 'paid',
+  },
+  {
+    id: 'F-2026-0802',
+    at: TODAY_START - 82 * DAY,
+    plan: 'Démarrage',
+    amount: 5_000,
+    method: 'MTN MoMo',
+    status: 'failed',
+  },
+];
+
+export type NotificationKind = 'stock' | 'billing' | 'team' | 'deposit' | 'system';
+
+export type Notification = {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  at: number;
+  read: boolean;
+  href: string;
+};
+
+const seedNotifications: Notification[] = [
   {
     id: 'n1',
-    tone: 'warning',
-    title: 'Écart sur le versement d’Akwa',
-    body: 'Il manque 15 000 FCFA sur le versement d’hier de Brice Tchoumi.',
-    href: '/app/versements',
-    at: NOW - 15 * HOUR,
+    kind: 'stock',
+    title: 'Rupture : iPhone 11 reconditionné',
+    body: '64 Go · Blanc, plus aucune unité en stock.',
+    at: NOW - 40 * MINUTE,
+    read: false,
+    href: '/app/stock?filtre=rupture',
   },
   {
     id: 'n2',
-    tone: 'danger',
-    title: 'Deux produits en rupture',
-    body: 'Crop top côtelé et Sandales tressées ne sont plus en stock.',
-    href: '/app/produits?filtre=rupture',
-    at: NOW - 3 * HOUR,
+    kind: 'deposit',
+    title: 'Écart sur le versement d’Akwa',
+    body: 'Il manque 15 000 FCFA sur le versement d’hier soir.',
+    at: NOW - 13 * HOUR,
+    read: false,
+    href: '/app/versements',
   },
   {
     id: 'n3',
-    tone: 'success',
-    title: 'Réception fournisseur enregistrée',
-    body: 'Ibrahim Bello a ajouté 24 Robes wax évasées au stock.',
-    href: '/app/produits',
-    at: NOW - 26 * HOUR,
+    kind: 'stock',
+    title: 'Stock faible : Parfum Oud Royal 100 ml',
+    body: '1 unité restante pour un seuil de 3.',
+    at: NOW - 3 * HOUR,
+    read: false,
+    href: '/app/stock?filtre=alerte',
+  },
+  {
+    id: 'n4',
+    kind: 'billing',
+    title: 'Votre abonnement se renouvelle dans 12 jours',
+    body: 'Formule Business, 12 000 FCFA par MTN MoMo.',
+    at: NOW - 6 * HOUR,
+    read: true,
+    href: '/app/abonnement',
+  },
+  {
+    id: 'n5',
+    kind: 'team',
+    title: 'Aïcha Bouba a rejoint la boutique',
+    body: 'Vendeuse à Bonapriso.',
+    at: NOW - 3 * DAY,
+    read: true,
+    href: '/app/equipe',
+  },
+  {
+    id: 'n6',
+    kind: 'system',
+    title: 'Nouveau : reçus par WhatsApp',
+    body: 'Envoyez le reçu au client en un geste depuis la caisse.',
+    at: NOW - 5 * DAY,
+    read: true,
+    href: '/app/caisse',
   },
 ];
+
+export type ActivityIcon = 'sale' | 'reception' | 'stock' | 'edit' | 'team' | 'deposit' | 'cash';
+export type Activity = { id: string; at: number; user: string; text: string; icon: ActivityIcon };
+
+const seedActivity: Activity[] = [
+  { id: 'a6', at: NOW - 12 * MINUTE, user: 'Junior Mbarga', text: 'a encaissé une vente à Akwa', icon: 'sale' },
+  {
+    id: 'a5',
+    at: NOW - 55 * MINUTE,
+    user: 'Serge Tchoumi',
+    text: 'a réceptionné 12 × Lait corporel karité',
+    icon: 'reception',
+  },
+  {
+    id: 'a4',
+    at: NOW - 2 * HOUR,
+    user: 'Patrick Essomba',
+    text: 'a retiré 1 × Escarpins vernis (talon cassé)',
+    icon: 'stock',
+  },
+  {
+    id: 'a3',
+    at: NOW - 4 * HOUR,
+    user: 'Mireille Ngo Bella',
+    text: 'a modifié le prix de Tecno Spark 20 Pro',
+    icon: 'edit',
+  },
+  { id: 'a2', at: NOW - 6 * HOUR, user: 'Aïcha Bouba', text: 'a ouvert la caisse de Bonapriso', icon: 'cash' },
+  { id: 'a1', at: NOW - 18 * HOUR, user: 'Brenda Nkeng', text: 'a versé 96 000 FCFA pour Bonapriso', icon: 'deposit' },
+];
+
+export type Ticket = { id: string; subject: string; category: string; status: 'open' | 'resolved'; at: number };
+
+const seedTickets: Ticket[] = [
+  {
+    id: 'T-1038',
+    subject: 'Imprimante thermique non détectée',
+    category: 'Caisse',
+    status: 'resolved',
+    at: NOW - 9 * DAY,
+  },
+];
+
+export type Settings = {
+  company: string;
+  niu: string;
+  rccm: string;
+  shopName: string;
+  city: string;
+  phone: string;
+  addresses: Record<Shop, string>;
+  receiptMessage: string;
+  paper: '58mm' | '80mm';
+  showLogo: boolean;
+  negativeStock: boolean;
+  rounding: boolean;
+  alerts: { stock: boolean; deposit: boolean; daily: boolean; cancel: boolean };
+};
+
+const seedSettings: Settings = {
+  company: 'Ngo Bella Distribution SARL',
+  niu: 'M052100123456P',
+  rccm: 'RC/DLA/2021/B/1234',
+  shopName: 'Boutique Ngo Bella',
+  city: 'Douala',
+  phone: '+237 699 41 22 08',
+  addresses: {
+    Akwa: 'Rue Joss, face à la pharmacie du Centre',
+    Bonapriso: 'Rue Njo-Njo, à côté de la boulangerie Zépol',
+  },
+  receiptMessage: 'Merci pour votre achat ! Échange possible sous 7 jours avec ce reçu.',
+  paper: '80mm',
+  showLogo: true,
+  negativeStock: false,
+  rounding: true,
+  alerts: { stock: true, deposit: true, daily: true, cancel: false },
+};
+
+/* ------------------------------------------------------------------ state */
+
+export const DEMO_VERSION = 1;
+
+export type DemoState = {
+  version: number;
+  role: RoleId;
+  categories: Category[];
+  products: Product[];
+  sales: Sale[];
+  deposits: Deposit[];
+  moves: Move[];
+  suppliers: Supplier[];
+  receptions: Reception[];
+  team: Member[];
+  plan: { id: PlanId; cycle: BillingCycle; expires: number };
+  invoices: Invoice[];
+  notifications: Notification[];
+  activity: Activity[];
+  tickets: Ticket[];
+  settings: Settings;
+};
+
+export function createSeed(): DemoState {
+  const sales = generateSales(seedProducts);
+  return {
+    version: DEMO_VERSION,
+    role: 'owner',
+    categories: seedCategories,
+    products: seedProducts,
+    sales,
+    deposits: buildDeposits(sales),
+    moves: seedMoves,
+    suppliers: seedSuppliers,
+    receptions: seedReceptions,
+    team: seedTeam,
+    plan: { id: 'business', cycle: 'monthly', expires: TODAY_START + 12 * DAY },
+    invoices: seedInvoices,
+    notifications: seedNotifications,
+    activity: seedActivity,
+    tickets: seedTickets,
+    settings: seedSettings,
+  };
+}

@@ -1,7 +1,6 @@
 import { CircleCheck, ClipboardCheck, Flag, HandCoins, Scale, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import {
-  deposits as initialDeposits,
   formatFcfa,
   formatFullDate,
   formatShortDate,
@@ -9,7 +8,9 @@ import {
   type Deposit,
   type DepositStatus,
 } from '../../data/dashboard';
-import { Badge, EmptyState, Modal, PageHeader, Segmented, StatCard, StatusBadge, useToasts } from './ui';
+import { logActivity, setDemo, useSession } from '../../lib/demo';
+import { Screen } from './Screen';
+import { Badge, EmptyState, Modal, PageHeader, Segmented, StatCard, StatusBadge, textareaClass, useToasts } from './ui';
 
 type Filter = 'all' | DepositStatus;
 
@@ -26,9 +27,27 @@ function Gap({ value }: { value: number }) {
 }
 
 export default function DepositsPage() {
-  const [list, setList] = useState(initialDeposits);
-  const [filter, setFilter] = useState<Filter>('pending');
-  const [reviewing, setReviewing] = useState<Deposit | null>(null);
+  return (
+    <Screen id="deposits">
+      <Deposits />
+    </Screen>
+  );
+}
+
+const replaceDeposit = (deposit: Deposit) =>
+  setDemo((demo) => ({
+    ...demo,
+    deposits: demo.deposits.map((item) => (item.id === deposit.id ? deposit : item)),
+  }));
+
+function Deposits() {
+  const { demo, roleId, member } = useSession();
+  const canReview = roleId === 'owner';
+  const list = canReview ? demo.deposits : demo.deposits.filter((deposit) => deposit.manager === member.name);
+  const [filter, setFilter] = useState<Filter>(canReview ? 'pending' : 'all');
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const reviewing = list.find((deposit) => deposit.id === reviewingId) ?? null;
+  const setReviewing = (deposit: Deposit | null) => setReviewingId(deposit?.id ?? null);
   const { notify, region } = useToasts();
 
   const expected = list.reduce((sum, deposit) => sum + deposit.expected, 0);
@@ -38,8 +57,11 @@ export default function DepositsPage() {
   const countBy = (status: DepositStatus) => list.filter((deposit) => deposit.status === status).length;
 
   const decide = (deposit: Deposit, status: DepositStatus, note: string) => {
-    setList((items) =>
-      items.map((item) => (item.id === deposit.id ? { ...item, status, note: note || item.note } : item)),
+    replaceDeposit({ ...deposit, status, note: note || deposit.note });
+    logActivity(
+      member.name,
+      `a ${status === 'verified' ? 'validé' : 'signalé un écart sur'} le versement de ${deposit.shop}`,
+      'deposit',
     );
     setReviewing(null);
     notify(
@@ -49,7 +71,7 @@ export default function DepositsPage() {
       {
         action: {
           label: 'Annuler',
-          run: () => setList((items) => items.map((item) => (item.id === deposit.id ? deposit : item))),
+          run: () => replaceDeposit(deposit),
         },
       },
     );
@@ -58,8 +80,12 @@ export default function DepositsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Versements des gérants"
-        description="Rapprochez chaque soir l’argent remis par vos gérants des ventes en espèces de leur boutique."
+        title={canReview ? 'Versements des gérants' : 'Mes versements'}
+        description={
+          canReview
+            ? 'Rapprochez chaque soir l’argent remis par vos gérants des ventes en espèces de leur boutique.'
+            : 'L’argent remis chaque soir pour les ventes en espèces de votre boutique, et sa vérification.'
+        }
       />
 
       <section aria-label="Résumé des 10 derniers jours" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
@@ -68,7 +94,8 @@ export default function DepositsPage() {
         </StatCard>
         <StatCard label="Montant versé" value={formatFcfa(deposited)} icon={CircleCheck} tone="gold">
           <p className="text-sm text-ink-mute">
-            {((deposited / expected) * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })}&nbsp;% des ventes
+            {(expected ? (deposited / expected) * 100 : 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })}
+            &nbsp;% des ventes
           </p>
         </StatCard>
         <StatCard label="Écart cumulé" value={<Gap value={deposited - expected} />} icon={Scale} tone="danger">
@@ -162,7 +189,7 @@ export default function DepositsPage() {
                     </dl>
                     <div className="flex items-center justify-between gap-3 lg:justify-end">
                       <StatusBadge kind="deposit" status={deposit.status} />
-                      {deposit.status === 'pending' ? (
+                      {deposit.status === 'pending' && canReview ? (
                         <button
                           type="button"
                           className="btn-gold h-9 px-4 text-sm"
@@ -188,7 +215,7 @@ export default function DepositsPage() {
         )}
       </section>
 
-      <ReviewDialog deposit={reviewing} onClose={() => setReviewing(null)} onDecide={decide} />
+      <ReviewDialog deposit={reviewing} canReview={canReview} onClose={() => setReviewing(null)} onDecide={decide} />
       {region}
     </div>
   );
@@ -196,16 +223,18 @@ export default function DepositsPage() {
 
 function ReviewDialog({
   deposit,
+  canReview,
   onClose,
   onDecide,
 }: {
   deposit: Deposit | null;
+  canReview: boolean;
   onClose: () => void;
   onDecide: (deposit: Deposit, status: DepositStatus, note: string) => void;
 }) {
   const [note, setNote] = useState('');
   const gap = deposit ? deposit.deposited - deposit.expected : 0;
-  const editable = deposit?.status === 'pending';
+  const editable = canReview && deposit?.status === 'pending';
 
   return (
     <Modal
@@ -288,7 +317,7 @@ function ReviewDialog({
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 placeholder="Ex. Monnaie rendue en trop, retenue sur la paie."
-                className="w-full rounded-xl border border-line bg-panel px-4 py-3 text-[0.9375rem] text-ink transition placeholder:text-ink-mute/80 focus:border-gold-500 focus:ring-4 focus:ring-gold-400/25 focus-visible:outline-none"
+                className={textareaClass}
               />
             </div>
           ) : (

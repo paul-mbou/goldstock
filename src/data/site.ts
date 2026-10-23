@@ -259,4 +259,4 @@ export const yearlyTotal = (monthly: number) => monthly * (12 - FREE_MONTHS_PER_
 export const yearlyPerMonth = (monthly: number) => Math.round(yearlyTotal(monthly) / 12 / 100) * 100;
 
 export const formatFcfa = (value: number) =>
-  `${new Intl.NumberFormat('fr-FR').format(value).replace(/\s/g, '\u00a0')}\u00a0FCFA`;
+  `${new Intl.NumberFormat('fr-FR').format(Math.round(value)).replace(/\s/g, '\u00a0')}\u00a0FCFA`;

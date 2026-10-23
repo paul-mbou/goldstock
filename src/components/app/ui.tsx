@@ -2,14 +2,40 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   ChevronDown,
-  CircleCheck,
   CircleAlert,
+  CircleCheck,
+  Droplet,
+  Footprints,
+  Minus,
+  Plus,
   Search,
+  Shirt,
+  Smartphone,
+  Tag,
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import type { DepositStatus, MemberStatus, SaleStatus, StockStatus } from '../../data/dashboard';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+  type SelectHTMLAttributes,
+} from 'react';
+import {
+  initials as toInitials,
+  type Category,
+  type CategoryIcon,
+  type DepositStatus,
+  type MemberStatus,
+  type ProductStatus,
+  type SaleState,
+  type Tone as CategoryTone,
+} from '../../data/dashboard';
+import type { StockStatus } from '../../lib/demo';
 
 /* ------------------------------------------------------------------ badges */
 
@@ -36,9 +62,15 @@ export function Badge({ tone, children, className = '' }: { tone: Tone; children
 
 const statusMeta = {
   sale: {
-    paid: { label: 'Payée', tone: 'success' },
-    pending: { label: 'En attente', tone: 'warning' },
-    cancelled: { label: 'Annulée', tone: 'neutral' },
+    ok: { label: 'Validée', tone: 'success' },
+    partial: { label: 'Retour partiel', tone: 'warning' },
+    refunded: { label: 'Remboursée', tone: 'neutral' },
+    cancelled: { label: 'Annulée', tone: 'danger' },
+  },
+  product: {
+    active: { label: 'Actif', tone: 'success' },
+    draft: { label: 'Brouillon', tone: 'neutral' },
+    archived: { label: 'Archivé', tone: 'neutral' },
   },
   stock: {
     ok: { label: 'En stock', tone: 'success' },
@@ -58,7 +90,8 @@ const statusMeta = {
 } satisfies Record<string, Record<string, { label: string; tone: Tone }>>;
 
 type StatusProps =
-  | { kind: 'sale'; status: SaleStatus }
+  | { kind: 'sale'; status: SaleState }
+  | { kind: 'product'; status: ProductStatus }
   | { kind: 'stock'; status: StockStatus }
   | { kind: 'deposit'; status: DepositStatus }
   | { kind: 'member'; status: MemberStatus };
@@ -160,14 +193,90 @@ export function EmptyState({ icon: Icon, title, children }: { icon: LucideIcon; 
   );
 }
 
-export function Avatar({ name, initials, size = 'md' }: { name: string; initials: string; size?: 'sm' | 'md' | 'lg' }) {
-  const sizes = { sm: 'size-8 text-xs', md: 'size-10 text-sm', lg: 'size-12 text-base' };
+export function Avatar({ name, size = 'md' }: { name: string; size?: 'xs' | 'sm' | 'md' | 'lg' }) {
+  const sizes = { xs: 'size-7 text-[0.6875rem]', sm: 'size-8 text-xs', md: 'size-10 text-sm', lg: 'size-12 text-base' };
   return (
     <span
-      title={name}
+      aria-hidden="true"
       className={`grid shrink-0 place-items-center rounded-full bg-linear-to-b from-navy-700 to-navy-900 font-bold text-gold-300 ring-2 ring-panel ${sizes[size]}`}
     >
-      {initials}
+      {toInitials(name)}
+    </span>
+  );
+}
+
+/** Card with an optional title row; the body keeps its own padding. */
+export function Card({
+  title,
+  description,
+  action,
+  children,
+  className = '',
+  bodyClassName,
+}: {
+  title?: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+}) {
+  return (
+    <section className={`app-card ${className}`}>
+      {title && (
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 sm:px-6">
+          <div>
+            <h2 className="font-bold text-ink">{title}</h2>
+            {description && <p className="mt-0.5 text-sm text-ink-mute">{description}</p>}
+          </div>
+          {action}
+        </div>
+      )}
+      <div className={bodyClassName ?? (title ? 'px-5 pb-5 sm:px-6 sm:pb-6' : 'p-5 sm:p-6')}>{children}</div>
+    </section>
+  );
+}
+
+export const linkClass =
+  'inline-flex items-center gap-1 text-sm font-semibold text-gold-700 hover:underline dark:text-gold-300';
+
+/* ------------------------------------------------------------------ categories */
+
+export const toneStyles: Record<CategoryTone, { tile: string; dot: string; hex: string }> = {
+  gold: { tile: 'bg-gold-50 text-gold-700 dark:bg-gold-400/10 dark:text-gold-300', dot: 'bg-gold-500', hex: '#e89d12' },
+  navy: { tile: 'bg-navy-50 text-navy-700 dark:bg-white/5 dark:text-navy-100', dot: 'bg-navy-500', hex: '#5b6680' },
+  teal: { tile: 'bg-teal-50 text-teal-700 dark:bg-teal-400/10 dark:text-teal-300', dot: 'bg-teal-500', hex: '#14b8a6' },
+  rose: { tile: 'bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300', dot: 'bg-rose-500', hex: '#f43f5e' },
+  violet: {
+    tile: 'bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-300',
+    dot: 'bg-violet-500',
+    hex: '#8b5cf6',
+  },
+};
+
+export const categoryIcons: Record<CategoryIcon, LucideIcon> = {
+  phone: Smartphone,
+  shoe: Footprints,
+  shirt: Shirt,
+  drop: Droplet,
+  tag: Tag,
+};
+
+export function CategoryTile({ category, size = 'md' }: { category?: Category; size?: 'sm' | 'md' | 'lg' }) {
+  const Icon = categoryIcons[category?.icon ?? 'tag'];
+  const sizes = { sm: 'size-8 rounded-lg', md: 'size-10 rounded-xl', lg: 'size-12 rounded-xl' };
+  return (
+    <span className={`grid shrink-0 place-items-center ${sizes[size]} ${toneStyles[category?.tone ?? 'navy'].tile}`}>
+      <Icon className={size === 'sm' ? 'size-4' : 'size-5'} aria-hidden="true" />
+    </span>
+  );
+}
+
+export function CategoryLabel({ category }: { category?: Category }) {
+  return (
+    <span className="inline-flex items-center gap-2 text-sm text-ink-soft">
+      <span className={`size-2 rounded-full ${toneStyles[category?.tone ?? 'navy'].dot}`} aria-hidden="true" />
+      {category?.name ?? '—'}
     </span>
   );
 }
@@ -297,6 +406,257 @@ export function SearchInput({
 export const selectClass =
   'h-11 appearance-none rounded-xl border border-line bg-panel pr-10 pl-3.5 text-[0.9375rem] font-medium text-ink transition hover:border-navy-200 focus:border-gold-500 focus:ring-4 focus:ring-gold-400/25 focus-visible:outline-none dark:hover:border-white/20';
 
+const controlBase =
+  'w-full rounded-xl border bg-panel text-[0.9375rem] text-ink transition placeholder:text-ink-mute/70 focus:ring-4 focus-visible:outline-none';
+
+export const inputClass = (invalid = false) =>
+  `${controlBase} h-11 px-3.5 ${
+    invalid
+      ? 'border-red-400 focus:border-red-500 focus:ring-red-500/15'
+      : 'border-line hover:border-navy-200 focus:border-gold-500 focus:ring-gold-400/25 dark:hover:border-white/20'
+  }`;
+
+export const textareaClass = `${controlBase} border-line px-3.5 py-3 hover:border-navy-200 focus:border-gold-500 focus:ring-gold-400/25 dark:hover:border-white/20`;
+
+export function FormField({
+  id,
+  label,
+  hint,
+  error,
+  children,
+  className = '',
+}: {
+  id: string;
+  label: ReactNode;
+  hint?: ReactNode;
+  error?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <label htmlFor={id} className="mb-1.5 block text-sm font-semibold text-ink">
+        {label}
+      </label>
+      {children}
+      {error ? (
+        <p
+          id={`${id}-error`}
+          className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-red-600 dark:text-red-400"
+        >
+          <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
+          {error}
+        </p>
+      ) : (
+        hint && <p className="mt-1.5 text-sm text-ink-mute">{hint}</p>
+      )}
+    </div>
+  );
+}
+
+export function SelectBox({ className = '', children, ...select }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <div className={`relative ${className}`}>
+      <select {...select} className={`${selectClass} w-full`}>
+        {children}
+      </select>
+      <ChevronDown
+        className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-ink-mute"
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
+
+/** Underlined tabs for switching views inside one page. */
+export function Tabs<T extends string>({
+  label,
+  tabs,
+  value,
+  onChange,
+}: {
+  label: string;
+  tabs: readonly { id: T; label: string; count?: number }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div role="tablist" aria-label={label} className="flex gap-1 overflow-x-auto border-b border-line">
+      {tabs.map((tab) => {
+        const active = tab.id === value;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(tab.id)}
+            className={`-mb-px inline-flex h-11 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap transition ${
+              active ? 'border-gold-500 text-ink' : 'border-transparent text-ink-mute hover:text-ink'
+            }`}
+          >
+            {tab.label}
+            {tab.count !== undefined && (
+              <span className="rounded-md bg-sunken px-1.5 text-xs text-ink-mute tabular-nums">{tab.count}</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function Switch({
+  checked,
+  onChange,
+  labelledBy,
+  label,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  labelledBy?: string;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-labelledby={labelledBy}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? 'bg-gold-500' : 'bg-navy-200 dark:bg-white/15'}`}
+    >
+      <span
+        className={`absolute top-1 left-1 size-5 rounded-full bg-white shadow transition ${checked ? 'translate-x-5' : ''}`}
+      />
+    </button>
+  );
+}
+
+export function Stepper({
+  value,
+  onChange,
+  min = 0,
+  max = Infinity,
+  label,
+  size = 'md',
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  label: string;
+  size?: 'sm' | 'md';
+}) {
+  const box = size === 'sm' ? 'size-8' : 'size-10';
+  const button = `grid ${box} place-items-center rounded-lg text-ink-soft transition hover:bg-sunken hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent`;
+  return (
+    <div
+      className="inline-flex items-center rounded-xl border border-line bg-panel p-0.5"
+      role="group"
+      aria-label={label}
+    >
+      <button
+        type="button"
+        className={button}
+        onClick={() => onChange(Math.max(min, value - 1))}
+        disabled={value <= min}
+        aria-label="Diminuer"
+      >
+        <Minus className="size-4" aria-hidden="true" />
+      </button>
+      <span className="min-w-8 text-center text-sm font-bold text-ink tabular-nums" aria-live="polite">
+        {value}
+      </span>
+      <button
+        type="button"
+        className={button}
+        onClick={() => onChange(Math.min(max, value + 1))}
+        disabled={value >= max}
+        aria-label="Augmenter"
+      >
+        <Plus className="size-4" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+/** Horizontal bars, one per row, sharing the same scale. */
+export function BarList({
+  rows,
+  format,
+}: {
+  rows: { id: string; label: ReactNode; value: number; color: string; meta?: ReactNode }[];
+  format: (value: number) => ReactNode;
+}) {
+  const max = Math.max(1, ...rows.map((row) => row.value));
+  return (
+    <ul className="space-y-4">
+      {rows.map((row) => (
+        <li key={row.id}>
+          <div className="flex items-baseline justify-between gap-3 text-sm">
+            <span className="min-w-0 truncate font-semibold text-ink">{row.label}</span>
+            <span className="shrink-0 text-ink-mute tabular-nums">
+              {row.meta && <span className="mr-2">{row.meta}</span>}
+              <span className="font-bold text-ink">{format(row.value)}</span>
+            </span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-sunken">
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${(row.value / max) * 100}%`, background: row.color }}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Ring chart; the legend lives next to it so the numbers stay readable. */
+export function Donut({
+  segments,
+  center,
+  caption,
+}: {
+  segments: { id: string; value: number; color: string }[];
+  center: ReactNode;
+  caption: string;
+}) {
+  const total = segments.reduce((sum, segment) => sum + segment.value, 0) || 1;
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  return (
+    <div className="relative mx-auto size-40">
+      <svg viewBox="0 0 100 100" className="size-full -rotate-90" role="img" aria-label={caption}>
+        <circle cx="50" cy="50" r={radius} fill="none" strokeWidth="12" className="stroke-sunken" />
+        {segments.map((segment) => {
+          const length = (segment.value / total) * circumference;
+          const dash = `${Math.max(0, length - 1.5)} ${circumference}`;
+          const circle = (
+            <circle
+              key={segment.id}
+              cx="50"
+              cy="50"
+              r={radius}
+              fill="none"
+              strokeWidth="12"
+              stroke={segment.color}
+              strokeDasharray={dash}
+              strokeDashoffset={-offset}
+            />
+          );
+          offset += length;
+          return circle;
+        })}
+      </svg>
+      <div className="absolute inset-0 grid place-items-center text-center">{center}</div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ dialogs */
 
 export function Modal({
@@ -307,6 +667,7 @@ export function Modal({
   children,
   footer,
   variant = 'center',
+  wide = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -315,8 +676,10 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   variant?: 'center' | 'sheet';
+  wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
@@ -328,19 +691,19 @@ export function Modal({
   const frame =
     variant === 'sheet'
       ? 'mr-0 ml-auto h-dvh max-h-dvh w-full max-w-lg animate-sheet-in rounded-none sm:rounded-l-3xl'
-      : 'm-auto max-h-[calc(100dvh-2rem)] w-[min(34rem,calc(100%-2rem))] animate-dialog-in rounded-3xl';
+      : `m-auto max-h-[calc(100dvh-2rem)] ${wide ? 'w-[min(46rem,calc(100%-2rem))]' : 'w-[min(34rem,calc(100%-2rem))]'} animate-dialog-in rounded-3xl`;
 
   return (
     <dialog
       ref={ref}
-      aria-labelledby="modal-title"
+      aria-labelledby={titleId}
       onClose={onClose}
       onClick={(event) => event.target === ref.current && onClose()}
       className={`${frame} flex-col overflow-hidden border border-line bg-panel p-0 text-ink shadow-2xl backdrop:bg-navy-950/60 backdrop:backdrop-blur-[2px] open:flex`}
     >
       <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-5">
         <div>
-          <h2 id="modal-title" className="text-lg font-bold">
+          <h2 id={titleId} className="text-lg font-bold">
             {title}
           </h2>
           {description && <p className="mt-0.5 text-sm text-ink-mute">{description}</p>}

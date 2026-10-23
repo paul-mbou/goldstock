@@ -251,3 +251,22 @@
     transform: scaleX(0);
   }
 }
+
+/* Receipts print on their own, whatever page or dialog shows them. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  [data-print],
+  [data-print] * {
+    visibility: visible;
+  }
+
+  [data-print] {
+    position: fixed;
+    top: 0;
+    left: 0;
+    border: 0;
+  }
+}

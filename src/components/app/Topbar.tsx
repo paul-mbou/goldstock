@@ -1,26 +1,44 @@
 import {
   Bell,
   ChevronDown,
-  CircleAlert,
-  CircleCheck,
   ExternalLink,
   LogOut,
   Menu,
   Moon,
+  MoreHorizontal,
   Package,
+  Plus,
+  ReceiptText,
+  RotateCcw,
   Search,
-  Settings,
-  ShoppingBag,
   Sun,
-  TriangleAlert,
   User,
+  UserCog,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { business, formatAgo, formatFcfa, notices, products, sales, team, type Notice } from '../../data/dashboard';
+import {
+  ROLES,
+  ROLE_IDS,
+  formatAgo,
+  formatFcfa,
+  navItems,
+  saleNet,
+  type RoleId,
+  type ScreenId,
+} from '../../data/dashboard';
+import {
+  markNotificationsRead,
+  resetDemo,
+  setRole,
+  useSession,
+  visibleNotifications,
+  visibleSales,
+} from '../../lib/demo';
 import { applyTheme } from '../../lib/theme';
 import { LogoMark } from '../brand/Logo';
-import { AppNav } from './AppNav';
+import { AppNav, isCurrent, screenIcons } from './AppNav';
+import { notificationStyle } from './NotificationItem';
 import { ShopCard } from './ShopCard';
 import { Avatar, useDismiss } from './ui';
 
@@ -29,36 +47,48 @@ const iconButton =
 
 export default function Topbar({ current }: { current: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { can, roleId } = useSession();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-canvas/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-[96rem] items-center gap-3 px-4 sm:px-6 lg:px-10">
-        <button
-          type="button"
-          className={`${iconButton} -ml-2 lg:hidden`}
-          onClick={() => setMenuOpen(true)}
-          aria-label="Ouvrir le menu"
-        >
-          <Menu className="size-5" aria-hidden="true" />
-        </button>
-        <a href="/app" className="lg:hidden" aria-label="GOLDSTOCK, tableau de bord">
-          <LogoMark className="size-7" />
-        </a>
+    <>
+      <header className="sticky top-0 z-30 border-b border-line bg-canvas/85 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-[96rem] items-center gap-3 px-4 sm:px-6 lg:px-10">
+          <button
+            type="button"
+            className={`${iconButton} -ml-2 lg:hidden`}
+            onClick={() => setMenuOpen(true)}
+            aria-label="Ouvrir le menu"
+          >
+            <Menu className="size-5" aria-hidden="true" />
+          </button>
+          <a href="/app" className="lg:hidden" aria-label="GOLDSTOCK, tableau de bord">
+            <LogoMark className="size-7" />
+          </a>
 
-        <GlobalSearch />
+          <GlobalSearch />
 
-        <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
-          <span className="mr-1 hidden rounded-full bg-gold-100 px-2.5 py-1 text-xs font-bold text-gold-700 sm:inline dark:bg-gold-400/10 dark:text-gold-300">
-            Démo
-          </span>
-          <ThemeToggle />
-          <Notifications />
-          <UserMenu />
+          <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
+            {roleId !== 'owner' && (
+              <span className="mr-1 hidden rounded-full bg-gold-100 px-2.5 py-1 text-xs font-bold text-gold-700 sm:inline dark:bg-gold-400/10 dark:text-gold-300">
+                Vue {ROLES[roleId].label}
+              </span>
+            )}
+            {can('pos') && current !== '/app/caisse' && (
+              <a href="/app/caisse" className="btn-gold mr-1.5 hidden h-10 px-4 text-sm md:inline-flex">
+                <Plus className="size-4" strokeWidth={2.5} aria-hidden="true" />
+                Nouvelle vente
+              </a>
+            )}
+            <ThemeToggle />
+            <Notifications />
+            <UserMenu current={current} />
+          </div>
         </div>
-      </div>
+      </header>
 
       <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} current={current} />
-    </header>
+      <BottomNav current={current} onMore={() => setMenuOpen(true)} />
+    </>
   );
 }
 
@@ -66,63 +96,68 @@ export default function Topbar({ current }: { current: string }) {
 
 type Result = { id: string; group: string; title: string; meta: string; href: string; icon: typeof Package };
 
-const normalize = (text: string) =>
+export const normalize = (text: string) =>
   text
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase();
 
-function searchEverything(query: string): Result[] {
-  const q = normalize(query.trim());
-  if (q.length < 2) return [];
-  const matches = (...fields: string[]) => fields.some((field) => normalize(field).includes(q));
-  return [
-    ...products
-      .filter((p) => matches(p.name, p.sku, p.category))
-      .slice(0, 4)
-      .map((p) => ({
-        id: p.id,
-        group: 'Produits',
-        title: p.name,
-        meta: `${p.sku} · ${p.stock} en stock`,
-        href: `/app/produits?q=${encodeURIComponent(p.name)}`,
-        icon: Package,
-      })),
-    ...sales
-      .filter((s) => matches(s.id, s.customer))
-      .slice(0, 4)
-      .map((s) => ({
-        id: s.id,
-        group: 'Ventes',
-        title: `${s.id} · ${s.customer}`,
-        meta: formatFcfa(s.total),
-        href: `/app/ventes?q=${encodeURIComponent(s.id)}`,
-        icon: ShoppingBag,
-      })),
-    ...team
-      .filter((m) => matches(m.name, m.role))
-      .slice(0, 3)
-      .map((m) => ({
-        id: m.id,
-        group: 'Équipe',
-        title: m.name,
-        meta: m.role,
-        href: `/app/equipe?q=${encodeURIComponent(m.name)}`,
-        icon: User,
-      })),
-  ];
-}
-
 function GlobalSearch() {
+  const session = useSession();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const wrapper = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
-  const results = useMemo(() => searchEverything(query), [query]);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(wrapper, open, close);
+
+  const results = useMemo<Result[]>(() => {
+    const q = normalize(query.trim());
+    if (q.length < 2) return [];
+    const matches = (...fields: string[]) => fields.some((field) => normalize(field).includes(q));
+    const { demo, can, role } = session;
+    return [
+      ...demo.products
+        .filter((p) => p.status !== 'archived' && matches(p.name, ...p.variants.map((item) => item.sku)))
+        .slice(0, 4)
+        .map((p) => ({
+          id: p.id,
+          group: 'Produits',
+          title: p.name,
+          meta: `${p.variants.reduce((sum, item) => sum + item.stock, 0)} en stock`,
+          href: `/app/produits?q=${encodeURIComponent(p.name)}`,
+          icon: Package,
+        })),
+      ...(can('sales')
+        ? visibleSales(session)
+            .filter((s) => matches(s.id, s.customer))
+            .slice(0, 4)
+            .map((s) => ({
+              id: s.id,
+              group: 'Ventes',
+              title: s.customer ? `${s.id} · ${s.customer}` : s.id,
+              meta: role.revenue ? formatFcfa(saleNet(s)) : s.shop,
+              href: `/app/ventes?q=${encodeURIComponent(s.id)}`,
+              icon: ReceiptText,
+            }))
+        : []),
+      ...(can('team')
+        ? demo.team
+            .filter((m) => matches(m.name, ROLES[m.role].label))
+            .slice(0, 3)
+            .map((m) => ({
+              id: m.id,
+              group: 'Équipe',
+              title: m.name,
+              meta: ROLES[m.role].label,
+              href: '/app/equipe',
+              icon: User,
+            }))
+        : []),
+    ];
+  }, [query, session]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -154,7 +189,7 @@ function GlobalSearch() {
         aria-autocomplete="list"
         aria-activedescendant={showList && results[active] ? `${listId}-${active}` : undefined}
         value={query}
-        placeholder="Rechercher un produit, une vente, un membre…"
+        placeholder="Rechercher un produit, une vente…"
         onChange={(event) => {
           setQuery(event.target.value);
           setActive(0);
@@ -249,22 +284,14 @@ function ThemeToggle() {
 
 /* ------------------------------------------------------------------ notifications */
 
-const noticeIcon: Record<Notice['tone'], { icon: typeof Bell; className: string }> = {
-  danger: { icon: CircleAlert, className: 'bg-red-50 text-red-600 dark:bg-red-400/10 dark:text-red-300' },
-  warning: { icon: TriangleAlert, className: 'bg-gold-50 text-gold-700 dark:bg-gold-400/10 dark:text-gold-300' },
-  success: {
-    icon: CircleCheck,
-    className: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-300',
-  },
-};
-
 function Notifications() {
+  const session = useSession();
   const [open, setOpen] = useState(false);
-  const [read, setRead] = useState<string[]>([]);
   const ref = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(ref, open, close);
-  const unread = notices.filter((notice) => !read.includes(notice.id)).length;
+  const list = visibleNotifications(session);
+  const unread = list.filter((item) => !item.read);
 
   return (
     <div ref={ref} className="relative">
@@ -272,36 +299,37 @@ function Notifications() {
         type="button"
         className={iconButton}
         aria-expanded={open}
-        aria-label={unread ? `Notifications, ${unread} non lues` : 'Notifications'}
+        aria-label={unread.length ? `Notifications, ${unread.length} non lues` : 'Notifications'}
         onClick={() => setOpen((value) => !value)}
       >
         <Bell className="size-5" aria-hidden="true" />
-        {unread > 0 && <span className="absolute top-2 right-2 size-2 rounded-full bg-red-500 ring-2 ring-canvas" />}
+        {unread.length > 0 && (
+          <span className="absolute top-2 right-2 size-2 rounded-full bg-red-500 ring-2 ring-canvas" />
+        )}
       </button>
 
       {open && (
         <div className="fixed inset-x-3 top-[4.25rem] w-auto animate-dialog-in overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl sm:absolute sm:inset-x-auto sm:top-12 sm:right-0 sm:w-96">
           <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
             <p className="font-bold text-ink">Notifications</p>
-            {unread > 0 && (
+            {unread.length > 0 && (
               <button
                 type="button"
                 className="rounded-lg px-2 py-1 text-sm font-semibold text-gold-700 transition hover:bg-sunken dark:text-gold-300"
-                onClick={() => setRead(notices.map((notice) => notice.id))}
+                onClick={() => markNotificationsRead(unread.map((item) => item.id))}
               >
                 Tout marquer comme lu
               </button>
             )}
           </div>
-          <ul className="divide-y divide-line">
-            {notices.map((notice) => {
-              const { icon: Icon, className } = noticeIcon[notice.tone];
-              const isUnread = !read.includes(notice.id);
+          <ul className="max-h-[22rem] divide-y divide-line overflow-y-auto">
+            {list.slice(0, 5).map((notice) => {
+              const { icon: Icon, className } = notificationStyle[notice.kind];
               return (
                 <li key={notice.id}>
                   <a
                     href={notice.href}
-                    onClick={() => setRead((list) => [...list, notice.id])}
+                    onClick={() => markNotificationsRead([notice.id])}
                     className="flex gap-3 px-4 py-3.5 transition hover:bg-sunken"
                   >
                     <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${className}`}>
@@ -309,8 +337,8 @@ function Notifications() {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-2 text-sm font-bold text-ink">
-                        {notice.title}
-                        {isUnread && (
+                        <span className="min-w-0">{notice.title}</span>
+                        {!notice.read && (
                           <span className="size-1.5 shrink-0 rounded-full bg-gold-500" aria-label="non lue" />
                         )}
                       </span>
@@ -322,6 +350,12 @@ function Notifications() {
               );
             })}
           </ul>
+          <a
+            href="/app/notifications"
+            className="block border-t border-line px-4 py-3 text-center text-sm font-semibold text-ink transition hover:bg-sunken"
+          >
+            Voir toutes les notifications
+          </a>
         </div>
       )}
     </div>
@@ -330,13 +364,25 @@ function Notifications() {
 
 /* ------------------------------------------------------------------ account */
 
-function UserMenu() {
+function currentScreen(current: string): ScreenId | undefined {
+  return navItems.find((item) => isCurrent(item.href, current))?.id;
+}
+
+function UserMenu({ current }: { current: string }) {
+  const { member, roleId } = useSession();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(ref, open, close);
   const item =
-    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-ink-soft transition hover:bg-sunken hover:text-ink';
+    'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-ink-soft transition hover:bg-sunken hover:text-ink';
+
+  const switchRole = (role: RoleId) => {
+    setRole(role);
+    setOpen(false);
+    const screen = currentScreen(current);
+    if (screen && screen !== 'settings' && !ROLES[role].screens.includes(screen)) window.location.href = '/app';
+  };
 
   return (
     <div ref={ref} className="relative">
@@ -347,29 +393,66 @@ function UserMenu() {
         onClick={() => setOpen((value) => !value)}
         className="flex items-center gap-2.5 rounded-xl py-1 pr-2 pl-1 transition hover:bg-sunken aria-expanded:bg-sunken"
       >
-        <Avatar name={business.owner.name} initials={business.owner.initials} size="sm" />
-        <span className="hidden text-left leading-tight md:block">
-          <span className="block text-sm font-bold text-ink">{business.owner.name}</span>
-          <span className="block text-xs text-ink-mute">Propriétaire</span>
+        <Avatar name={member.name} size="sm" />
+        <span className="hidden text-left leading-tight xl:block">
+          <span className="block text-sm font-bold text-ink">{member.name}</span>
+          <span className="block text-xs text-ink-mute">{ROLES[roleId].label}</span>
         </span>
-        <ChevronDown className="hidden size-4 text-ink-mute md:block" aria-hidden="true" />
+        <ChevronDown className="hidden size-4 text-ink-mute xl:block" aria-hidden="true" />
       </button>
 
       {open && (
-        <div className="absolute top-12 right-0 w-64 animate-dialog-in rounded-2xl border border-line bg-panel p-2 shadow-2xl">
-          <div className="border-b border-line px-3 pt-2 pb-3">
-            <p className="font-bold text-ink">{business.owner.name}</p>
-            <p className="text-sm text-ink-mute">{business.owner.phone}</p>
+        <div className="absolute top-12 right-0 w-72 animate-dialog-in rounded-2xl border border-line bg-panel p-2 shadow-2xl">
+          <div className="flex items-center gap-3 border-b border-line px-3 pt-2 pb-3">
+            <Avatar name={member.name} />
+            <div className="min-w-0">
+              <p className="truncate font-bold text-ink">{member.name}</p>
+              <p className="truncate text-sm text-ink-mute">
+                {ROLES[roleId].label} · {member.shop === 'Toutes' ? 'Toutes les boutiques' : member.shop}
+              </p>
+            </div>
           </div>
+
+          <div className="border-b border-line px-1 pt-3 pb-3">
+            <p className="flex items-center gap-2 px-2 text-[0.6875rem] font-bold tracking-[0.12em] text-ink-mute uppercase">
+              <UserCog className="size-3.5" aria-hidden="true" />
+              Voir la démo en tant que
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              {ROLE_IDS.map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  aria-pressed={role === roleId}
+                  onClick={() => switchRole(role)}
+                  className="h-9 rounded-lg border border-line text-sm font-semibold text-ink-soft transition hover:bg-sunken aria-pressed:border-gold-500 aria-pressed:bg-gold-50 aria-pressed:text-ink dark:aria-pressed:bg-gold-400/10"
+                >
+                  {ROLES[role].label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="pt-2">
-            <a href="/app/parametres" className={item}>
-              <Settings className="size-4" aria-hidden="true" />
-              Paramètres
+            <a href="/app/parametres?onglet=profil" className={item}>
+              <User className="size-4" aria-hidden="true" />
+              Mon profil
             </a>
             <a href="/" className={item}>
               <ExternalLink className="size-4" aria-hidden="true" />
               Voir le site GOLDSTOCK
             </a>
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                resetDemo();
+                window.location.reload();
+              }}
+            >
+              <RotateCcw className="size-4" aria-hidden="true" />
+              Réinitialiser la démo
+            </button>
             <a href="/connexion" className={`${item} text-red-600 hover:text-red-700 dark:text-red-400`}>
               <LogOut className="size-4" aria-hidden="true" />
               Se déconnecter
@@ -422,9 +505,68 @@ function MobileMenu({ open, onClose, current }: { open: boolean; onClose: () => 
           <ShopCard />
         </div>
         <div className="mt-6">
-          <AppNav current={current} />
+          <AppNav current={current} onNavigate={onClose} />
         </div>
       </div>
     </dialog>
+  );
+}
+
+const bottomCandidates: { id: ScreenId; label: string }[] = [
+  { id: 'dash', label: 'Accueil' },
+  { id: 'pos', label: 'Caisse' },
+  { id: 'sales', label: 'Ventes' },
+  { id: 'products', label: 'Produits' },
+  { id: 'stock', label: 'Stock' },
+  { id: 'suppliers', label: 'Réceptions' },
+];
+
+function BottomNav({ current, onMore }: { current: string; onMore: () => void }) {
+  const { can } = useSession();
+  const items = bottomCandidates.filter((item) => can(item.id)).slice(0, 4);
+  const hrefOf = (id: ScreenId) => navItems.find((item) => item.id === id)!.href;
+
+  return (
+    <nav
+      aria-label="Navigation rapide"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-panel/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+    >
+      <ul className="mx-auto grid max-w-lg grid-cols-5">
+        {items.map(({ id, label }) => {
+          const Icon = screenIcons[id];
+          const active = isCurrent(hrefOf(id), current);
+          return (
+            <li key={id}>
+              <a
+                href={hrefOf(id)}
+                aria-current={active ? 'page' : undefined}
+                className={`flex h-16 flex-col items-center justify-center gap-1 text-[0.6875rem] font-semibold transition ${
+                  active ? 'text-gold-700 dark:text-gold-300' : 'text-ink-mute hover:text-ink'
+                }`}
+              >
+                <span
+                  className={`grid h-7 w-12 place-items-center rounded-full transition ${active ? 'bg-gold-100 dark:bg-gold-400/15' : ''}`}
+                >
+                  <Icon className="size-5" strokeWidth={active ? 2.25 : 2} aria-hidden="true" />
+                </span>
+                {label}
+              </a>
+            </li>
+          );
+        })}
+        <li>
+          <button
+            type="button"
+            onClick={onMore}
+            className="flex h-16 w-full flex-col items-center justify-center gap-1 text-[0.6875rem] font-semibold text-ink-mute transition hover:text-ink"
+          >
+            <span className="grid h-7 w-12 place-items-center">
+              <MoreHorizontal className="size-5" aria-hidden="true" />
+            </span>
+            Plus
+          </button>
+        </li>
+      </ul>
+    </nav>
   );
 }

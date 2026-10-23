@@ -1,15 +1,12 @@
 ---
-import { LifeBuoy } from 'lucide-react';
 import { Logo } from '../brand/Logo';
-import { AppNav } from './AppNav';
-import { ShopCard } from './ShopCard';
-import { whatsappUrl } from '../../data/site';
+import SidebarBody from './SidebarBody';
 
 type Props = { current: string };
 const { current } = Astro.props;
 ---
 
-<aside class="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col overflow-y-auto bg-navy-950 px-4 pt-6 pb-5 lg:flex">
+<aside class="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col overflow-y-auto bg-navy-950 px-4 pt-6 pb-6 lg:flex">
   <div
     aria-hidden="true"
     class="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(80%_60%_at_20%_0%,rgb(244_181_44/0.12),transparent)]"
@@ -17,25 +14,5 @@ const { current } = Astro.props;
   <a href="/app" class="relative px-2 text-white" aria-label="GOLDSTOCK, tableau de bord">
     <Logo />
   </a>
-  <div class="relative mt-7">
-    <ShopCard />
-  </div>
-  <div class="relative mt-6 flex-1">
-    <p class="mb-2 px-3.5 text-[0.6875rem] font-bold tracking-[0.14em] text-white/40 uppercase">Gestion</p>
-    <AppNav current={current} />
-  </div>
-  <a
-    href={whatsappUrl('Bonjour GOLDSTOCK, j’ai besoin d’aide avec mon tableau de bord.')}
-    target="_blank"
-    rel="noopener noreferrer"
-    class="relative mt-6 flex items-start gap-3 rounded-2xl bg-white/[0.04] p-4 ring-1 ring-white/[0.08] transition ring-inset hover:bg-white/[0.07]"
-  >
-    <LifeBuoy className="mt-0.5 size-5 shrink-0 text-gold-300" aria-hidden="true" />
-    <span>
-      <span class="block text-sm font-bold text-white">Besoin d’aide ?</span>
-      <span class="mt-0.5 block text-xs leading-relaxed text-white/60">
-        Notre équipe vous répond sur WhatsApp, 7j/7.
-      </span>
-    </span>
-  </a>
+  <SidebarBody client:load current={current} />
 </aside>

@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
-import { formatCompact, formatFcfa, type ChartPoint } from '../../data/dashboard';
+import { formatCompact, formatFcfa } from '../../data/dashboard';
+import type { ChartPoint } from '../../lib/demo';
 
 function niceMax(value: number) {
   const magnitude = 10 ** Math.floor(Math.log10(Math.max(value, 1)));

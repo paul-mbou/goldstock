@@ -38,7 +38,7 @@ const current = Astro.url.pathname.replace(/\/+$/, '') || '/';
     <Sidebar current={current} />
     <div class="lg:pl-72">
       <Topbar client:load current={current} />
-      <main id="contenu" class="mx-auto w-full max-w-[96rem] px-4 pt-6 pb-16 sm:px-6 lg:px-10 lg:pt-8">
+      <main id="contenu" class="mx-auto w-full max-w-[96rem] px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-8 lg:pb-16">
         <slot />
       </main>
     </div>

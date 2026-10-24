@@ -1,6 +1,7 @@
 import {
   Boxes,
   ClipboardCheck,
+  PackageMinus,
   PackagePlus,
   PackageX,
   SearchX,
@@ -8,9 +9,27 @@ import {
   TriangleAlert,
   Wallet,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { MOVE_LABELS, formatFcfa, formatNumber, formatWhen, type Move, type MoveType } from '../../data/dashboard';
-import { adjustStock, applyInventory, flatItems, stockStatus, useSession, type Item } from '../../lib/demo';
+import { useEffect, useState, type SubmitEvent } from 'react';
+import {
+  HOUR,
+  MOVE_LABELS,
+  NOW,
+  formatFcfa,
+  formatNumber,
+  formatWhen,
+  type Move,
+  type MoveType,
+} from '../../data/dashboard';
+import {
+  adjustStock,
+  applyInventory,
+  flatItems,
+  recordMove,
+  stockStatus,
+  useSession,
+  type Item,
+  type MoveInput,
+} from '../../lib/demo';
 import { Screen } from './Screen';
 import {
   Badge,
@@ -20,13 +39,14 @@ import {
   Modal,
   PageHeader,
   SearchInput,
-  SelectBox,
   Segmented,
+  SelectBox,
   StatCard,
   StatusBadge,
   Stepper,
   Tabs,
   inputClass,
+  linkClass,
   useQueryParam,
   useToasts,
   type Tone,
@@ -56,6 +76,7 @@ function Stock() {
   const { demo, role } = session;
   const [view, setView] = useState<View>('state');
   const [adjusting, setAdjusting] = useState<Item | null>(null);
+  const [moving, setMoving] = useState<Direction | null>(null);
   const { notify, region } = useToasts();
   const items = flatItems(demo);
 
@@ -76,12 +97,16 @@ function Stock() {
         title="Stock"
         description="Quantités par article, mouvements et inventaire."
         actions={
-          role.screens.includes('suppliers') && (
-            <a href="/app/fournisseurs?onglet=reception" className="btn-gold h-11 px-4">
+          <>
+            <button type="button" className="btn-quiet h-11 px-4" onClick={() => setMoving('out')}>
+              <PackageMinus className="size-[1.125rem]" aria-hidden="true" />
+              Sortie
+            </button>
+            <button type="button" className="btn-gold h-11 px-4" onClick={() => setMoving('in')}>
               <PackagePlus className="size-[1.125rem]" aria-hidden="true" />
-              Réceptionner
-            </a>
-          )
+              Entrée
+            </button>
+          </>
         }
       />
 
@@ -142,6 +167,23 @@ function Stock() {
           notify(`${item.full} : ${delta > 0 ? '+' : ''}${delta} (${MOVE_LABELS[type].toLowerCase()}).`);
         }}
       />
+      {moving && (
+        <MoveDialog
+          initialDirection={moving}
+          items={items}
+          onClose={() => setMoving(null)}
+          onSave={(input, item) => {
+            recordMove(input);
+            setMoving(null);
+            setView('moves');
+            notify(
+              input.direction === 'in'
+                ? `Entrée enregistrée : +${input.qty} ${item.full}.`
+                : `Sortie enregistrée : −${input.qty} ${item.full}.`,
+            );
+          }}
+        />
+      )}
       {region}
     </div>
   );
@@ -219,7 +261,12 @@ function StockState({ items, onAdjust }: { items: Item[]; onAdjust: (item: Item)
         </div>
       </div>
 
-      {visible.length === 0 ? (
+      {items.length === 0 ? (
+        <EmptyState icon={Boxes} title="Aucun article en stock">
+          Le stock se remplit quand vous ajoutez un produit avec sa quantité, ou quand vous saisissez une réception de
+          marchandise.
+        </EmptyState>
+      ) : visible.length === 0 ? (
         <EmptyState icon={SearchX} title="Aucun article ne correspond">
           Essayez un autre nom, une autre catégorie ou retirez le filtre.
         </EmptyState>
@@ -332,36 +379,67 @@ function StockMeter({ item }: { item: Item }) {
 
 const moveTone: Record<MoveType, Tone> = {
   reception: 'success',
+  entry: 'success',
+  exit: 'warning',
   adjust: 'navy',
   loss: 'danger',
   return: 'warning',
   inventory: 'neutral',
 };
 
+type Flow = 'all' | 'in' | 'out';
+
 function Moves({ moves }: { moves: Move[] }) {
   const [type, setType] = useState<'all' | MoveType>('all');
-  const visible = moves.filter((move) => type === 'all' || move.type === type);
+  const [flow, setFlow] = useState<Flow>('all');
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const searched = moves.filter(
+    (move) =>
+      (type === 'all' || move.type === type) &&
+      (!q || `${move.item} ${move.user} ${move.source ?? ''} ${move.destination ?? ''}`.toLowerCase().includes(q)),
+  );
+  const visible = searched.filter((move) => flow === 'all' || (flow === 'in' ? move.qty > 0 : move.qty < 0));
 
   return (
     <>
-      <div className="border-b border-line p-4 sm:p-5">
-        <SelectBox
-          aria-label="Type de mouvement"
-          value={type}
-          onChange={(event) => setType(event.target.value as typeof type)}
-          className="sm:w-60"
-        >
-          <option value="all">Tous les mouvements</option>
-          {(Object.keys(MOVE_LABELS) as MoveType[]).map((id) => (
-            <option key={id} value={id}>
-              {MOVE_LABELS[id]}
-            </option>
-          ))}
-        </SelectBox>
+      <div className="flex flex-col gap-3 border-b border-line p-4 sm:p-5 xl:flex-row xl:items-center">
+        <Segmented
+          label="Sens du mouvement"
+          value={flow}
+          onChange={setFlow}
+          options={[
+            { id: 'all', label: 'Tous', count: searched.length },
+            { id: 'in', label: 'Entrées', count: searched.filter((move) => move.qty > 0).length },
+            { id: 'out', label: 'Sorties', count: searched.filter((move) => move.qty < 0).length },
+          ]}
+        />
+        <div className="flex flex-col gap-3 sm:flex-row xl:ml-auto">
+          <SelectBox
+            aria-label="Type de mouvement"
+            value={type}
+            onChange={(event) => setType(event.target.value as typeof type)}
+            className="sm:w-52"
+          >
+            <option value="all">Tous les types</option>
+            {(Object.keys(MOVE_LABELS) as MoveType[]).map((id) => (
+              <option key={id} value={id}>
+                {MOVE_LABELS[id]}
+              </option>
+            ))}
+          </SelectBox>
+          <SearchInput
+            label="Rechercher un mouvement"
+            placeholder="Article, auteur, provenance"
+            value={query}
+            onChange={setQuery}
+            className="sm:w-72"
+          />
+        </div>
       </div>
       {visible.length === 0 ? (
         <EmptyState icon={Boxes} title="Aucun mouvement">
-          Les réceptions, retours et corrections apparaîtront ici.
+          Les entrées, sorties, réceptions et corrections apparaîtront ici.
         </EmptyState>
       ) : (
         <ul className="divide-y divide-line">
@@ -377,8 +455,14 @@ function Moves({ moves }: { moves: Move[] }) {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-ink">{move.item}</p>
+                {(move.source || move.destination) && (
+                  <p className="text-sm text-ink-soft">
+                    <span className="text-ink-mute">{move.source ? 'Provenance' : 'Destination'} :</span>{' '}
+                    <span className="font-medium">{move.source ?? move.destination}</span>
+                  </p>
+                )}
                 <p className="text-sm text-ink-mute">
-                  {move.note || '—'} · {move.user}
+                  {move.note && `${move.note} · `}par <span className="font-medium text-ink-soft">{move.user}</span>
                 </p>
               </div>
               <Badge tone={moveTone[move.type]}>{MOVE_LABELS[move.type]}</Badge>
@@ -584,13 +668,363 @@ function AdjustDialog({
             <input
               id="adjust-note"
               className={inputClass()}
-              placeholder="Ex. Écran fissuré à la livraison"
+              placeholder="Ex. Abîmé à la livraison"
               value={note}
               onChange={(event) => setNote(event.target.value)}
             />
           </FormField>
         </div>
       )}
+    </Modal>
+  );
+}
+
+type Direction = 'in' | 'out';
+
+/** `detail`: the free-text precision the kind asks for; `supplier` picks from the supplier list instead. */
+type PartyKind = {
+  id: string;
+  label: string;
+  hint: string;
+  type: MoveType;
+  detail: { label: string; placeholder: string; required: boolean } | 'supplier';
+};
+
+const partyKinds: Record<Direction, PartyKind[]> = {
+  in: [
+    { id: 'supplier', label: 'Fournisseur', hint: 'Livraison d’un fournisseur.', type: 'entry', detail: 'supplier' },
+    {
+      id: 'market',
+      label: 'Achat direct',
+      hint: 'Marché, grossiste, particulier.',
+      type: 'entry',
+      detail: { label: 'Lieu ou vendeur', placeholder: 'Ex. Marché Mboppi, Douala', required: true },
+    },
+    {
+      id: 'return',
+      label: 'Retour client',
+      hint: 'Article rapporté en bon état.',
+      type: 'return',
+      detail: { label: 'Client ou n° de vente', placeholder: 'Ex. Mme Ngo, V-0412', required: false },
+    },
+    {
+      id: 'other',
+      label: 'Autre',
+      hint: 'Dépôt, don, transfert…',
+      type: 'entry',
+      detail: { label: 'Provenance', placeholder: 'Ex. Dépôt de la boutique de Yaoundé', required: true },
+    },
+  ],
+  out: [
+    {
+      id: 'loss',
+      label: 'Casse ou perte',
+      hint: 'Abîmé, volé ou périmé.',
+      type: 'loss',
+      detail: { label: 'Précision', placeholder: 'Ex. Écran fissuré', required: false },
+    },
+    { id: 'supplier', label: 'Retour fournisseur', hint: 'Renvoyé au fournisseur.', type: 'exit', detail: 'supplier' },
+    {
+      id: 'internal',
+      label: 'Usage interne',
+      hint: 'Démonstration, échantillon.',
+      type: 'exit',
+      detail: { label: 'Précision', placeholder: 'Ex. Modèle d’exposition', required: false },
+    },
+    {
+      id: 'other',
+      label: 'Autre',
+      hint: 'Transfert, prêt, don…',
+      type: 'exit',
+      detail: { label: 'Destination', placeholder: 'Ex. Boutique de Yaoundé', required: true },
+    },
+  ],
+};
+
+/** Calendar day in Cameroon (UTC+1), as an `<input type="date">` value. */
+const dayKey = (ts: number) => new Date(ts + HOUR).toISOString().slice(0, 10);
+const TODAY = dayKey(NOW);
+
+type MoveErrors = Partial<Record<'item' | 'qty' | 'detail' | 'day', string>>;
+
+function MoveDialog({
+  initialDirection,
+  items,
+  onClose,
+  onSave,
+}: {
+  initialDirection: Direction;
+  items: Item[];
+  onClose: () => void;
+  onSave: (input: MoveInput, item: Item) => void;
+}) {
+  const { demo, member, can } = useSession();
+  const [direction, setDirection] = useState(initialDirection);
+  const [vid, setVid] = useState('');
+  const [qty, setQty] = useState(1);
+  const [kindId, setKindId] = useState(partyKinds[initialDirection][0].id);
+  const [supplierId, setSupplierId] = useState(demo.suppliers[0]?.id ?? '');
+  const [detail, setDetail] = useState('');
+  const [day, setDay] = useState(TODAY);
+  const [author, setAuthor] = useState(member.name);
+  const [note, setNote] = useState('');
+  const [errors, setErrors] = useState<MoveErrors>({});
+
+  const entry = direction === 'in';
+  const kinds = partyKinds[direction];
+  const kind = kinds.find((item) => item.id === kindId) ?? kinds[0];
+  const item = items.find((candidate) => candidate.variant.id === vid);
+  const stock = item?.variant.stock ?? 0;
+  const authors = demo.team.filter((person) => person.status === 'active').map((person) => person.name);
+  if (!authors.includes(member.name)) authors.unshift(member.name);
+
+  const clear = (field: keyof MoveErrors) => setErrors((current) => ({ ...current, [field]: undefined }));
+
+  const chooseDirection = (next: Direction) => {
+    setDirection(next);
+    setKindId(partyKinds[next][0].id);
+    setDetail('');
+    setErrors({});
+  };
+
+  const party = () => {
+    const supplier = demo.suppliers.find((candidate) => candidate.id === supplierId)?.name ?? '';
+    if (kind.detail === 'supplier') return entry ? supplier : `${kind.label} · ${supplier}`;
+    const text = detail.trim();
+    if (kind.id === 'other') return text;
+    return text ? `${kind.label} · ${text}` : kind.label;
+  };
+
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const found: MoveErrors = {};
+    if (!item) found.item = 'Choisissez l’article concerné.';
+    else if (!entry && stock === 0) found.item = 'Cet article est en rupture : rien à sortir.';
+    else if (!entry && qty > stock) found.qty = `Il n’en reste que ${stock} en stock.`;
+    if (qty < 1) found.qty = 'Indiquez une quantité d’au moins 1.';
+    if (kind.detail === 'supplier' && !supplierId) found.detail = 'Ajoutez d’abord un fournisseur.';
+    if (kind.detail !== 'supplier' && kind.detail.required && detail.trim().length < 2)
+      found.detail = entry ? 'Indiquez la provenance.' : 'Indiquez la destination.';
+    if (!day || day > TODAY) found.day = 'Choisissez une date passée ou aujourd’hui.';
+    setErrors(found);
+    const first = (['item', 'qty', 'detail', 'day'] as const).find((field) => found[field]);
+    if (first) {
+      document.getElementById(`move-${first}`)?.focus();
+      return;
+    }
+    onSave(
+      {
+        vid,
+        direction,
+        qty,
+        type: kind.type,
+        party: party(),
+        at: day === TODAY ? null : Date.parse(`${day}T12:00:00+01:00`),
+        user: author,
+        note,
+      },
+      item!,
+    );
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={entry ? 'Entrée de stock' : 'Sortie de stock'}
+      description={
+        entry
+          ? 'Des articles arrivent : précisez d’où ils viennent.'
+          : 'Des articles quittent le stock sans être vendus.'
+      }
+      footer={
+        <>
+          <button type="button" className="btn-quiet h-11 px-4" onClick={onClose}>
+            Annuler
+          </button>
+          <button type="submit" form="stock-move" className="btn-gold h-11 px-5">
+            {entry ? 'Enregistrer l’entrée' : 'Enregistrer la sortie'}
+          </button>
+        </>
+      }
+    >
+      <form id="stock-move" noValidate onSubmit={submit} className="space-y-5">
+        <Segmented
+          label="Sens du mouvement"
+          value={direction}
+          onChange={chooseDirection}
+          options={[
+            { id: 'in', label: 'Entrée' },
+            { id: 'out', label: 'Sortie' },
+          ]}
+        />
+
+        <FormField id="move-item" label="Article" error={errors.item}>
+          <SelectBox
+            id="move-item"
+            value={vid}
+            onChange={(event) => {
+              setVid(event.target.value);
+              clear('item');
+              clear('qty');
+            }}
+          >
+            <option value="">Choisir un article…</option>
+            {demo.categories.map((category) => (
+              <optgroup key={category.id} label={category.name}>
+                {items
+                  .filter((candidate) => candidate.product.cat === category.id)
+                  .map((candidate) => (
+                    <option key={candidate.key} value={candidate.variant.id}>
+                      {candidate.full} (stock {candidate.variant.stock})
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </SelectBox>
+        </FormField>
+
+        <div>
+          <div className="flex items-center justify-between gap-4 rounded-2xl bg-sunken p-4">
+            <div>
+              <p className="text-sm text-ink-mute">Actuel</p>
+              <p className="text-2xl font-extrabold text-ink tabular-nums">{item ? stock : '—'}</p>
+            </div>
+            <div id="move-qty" tabIndex={-1} className="text-center focus-visible:outline-none">
+              <p className="mb-1 text-sm font-semibold text-ink">Quantité</p>
+              <Stepper
+                label="Quantité"
+                value={qty}
+                min={1}
+                max={!entry && item ? Math.max(1, stock) : Infinity}
+                onChange={(value) => {
+                  setQty(value);
+                  clear('qty');
+                }}
+              />
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-ink-mute">Après</p>
+              <p className="text-2xl font-extrabold text-ink tabular-nums" aria-live="polite">
+                {item ? Math.max(0, stock + (entry ? qty : -qty)) : '—'}
+              </p>
+            </div>
+          </div>
+          {errors.qty && (
+            <p role="alert" className="mt-1.5 text-sm font-medium text-red-600 dark:text-red-400">
+              {errors.qty}
+            </p>
+          )}
+        </div>
+
+        <fieldset>
+          <legend className="mb-1.5 text-sm font-semibold text-ink">{entry ? 'Provenance' : 'Motif'}</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {kinds.map((option) => (
+              <label
+                key={option.id}
+                className="cursor-pointer rounded-xl border border-line p-3 transition hover:border-navy-200 has-checked:border-gold-500 has-checked:bg-gold-50 has-focus-visible:ring-4 has-focus-visible:ring-gold-400/25 dark:hover:border-white/20 dark:has-checked:bg-gold-400/10"
+              >
+                <input
+                  type="radio"
+                  name="move-kind"
+                  className="sr-only"
+                  checked={kind.id === option.id}
+                  onChange={() => {
+                    setKindId(option.id);
+                    setDetail('');
+                    clear('detail');
+                  }}
+                />
+                <span className="block text-sm font-bold text-ink">{option.label}</span>
+                <span className="block text-xs text-ink-mute">{option.hint}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {kind.detail === 'supplier' ? (
+          <FormField
+            id="move-detail"
+            label="Fournisseur"
+            error={errors.detail}
+            hint={
+              entry &&
+              can('suppliers') && (
+                <>
+                  Livraison avec bon et prix d’achat ?{' '}
+                  <a href="/app/fournisseurs?onglet=reception" className={linkClass}>
+                    Faire une réception
+                  </a>
+                </>
+              )
+            }
+          >
+            <SelectBox id="move-detail" value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
+              {demo.suppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </SelectBox>
+          </FormField>
+        ) : (
+          <FormField
+            id="move-detail"
+            label={
+              <>
+                {kind.detail.label}
+                {!kind.detail.required && <span className="font-normal text-ink-mute"> (facultatif)</span>}
+              </>
+            }
+            error={errors.detail}
+          >
+            <input
+              id="move-detail"
+              className={inputClass(Boolean(errors.detail))}
+              placeholder={kind.detail.placeholder}
+              value={detail}
+              onChange={(event) => {
+                setDetail(event.target.value);
+                clear('detail');
+              }}
+            />
+          </FormField>
+        )}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField id="move-day" label="Date" error={errors.day}>
+            <input
+              id="move-day"
+              type="date"
+              max={TODAY}
+              className={inputClass(Boolean(errors.day))}
+              value={day}
+              onChange={(event) => {
+                setDay(event.target.value);
+                clear('day');
+              }}
+            />
+          </FormField>
+          <FormField id="move-author" label="Fait par">
+            <SelectBox id="move-author" value={author} onChange={(event) => setAuthor(event.target.value)}>
+              {authors.map((name) => (
+                <option key={name}>{name}</option>
+              ))}
+            </SelectBox>
+          </FormField>
+        </div>
+
+        <FormField id="move-note" label="Note" hint="Facultatif. Visible dans l’historique des mouvements.">
+          <input
+            id="move-note"
+            className={inputClass()}
+            placeholder={entry ? 'Ex. Bon de livraison BL-7790' : 'Ex. Remis à Paul pour la vitrine'}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+          />
+        </FormField>
+      </form>
     </Modal>
   );
 }

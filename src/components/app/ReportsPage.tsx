@@ -250,7 +250,11 @@ function Reports() {
           {role.allSales && <PaymentMix totals={current} />}
           {role.costs && (
             <Card title="Valeur du stock" description="Au prix d’achat, par catégorie">
-              <BarList rows={stockByCategory} format={formatFcfa} />
+              {stockByCategory.length ? (
+                <BarList rows={stockByCategory} format={formatFcfa} />
+              ) : (
+                <p className="py-6 text-center text-sm text-ink-mute">Aucun article en stock.</p>
+              )}
             </Card>
           )}
         </div>

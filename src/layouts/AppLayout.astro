@@ -1,8 +1,10 @@
 ---
 import '@fontsource-variable/plus-jakarta-sans';
 import '../styles/global.css';
+import GuidedTour from '../components/app/GuidedTour';
 import Sidebar from '../components/app/Sidebar.astro';
 import Topbar from '../components/app/Topbar';
+import { isAuthLive } from '../lib/auth';
 
 type Props = { title: string };
 
@@ -11,7 +13,7 @@ const current = Astro.url.pathname.replace(/\/+$/, '') || '/';
 ---
 
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-auth-pending={isAuthLive ? '' : undefined}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -26,6 +28,29 @@ const current = Astro.url.pathname.replace(/\/+$/, '') || '/';
       if (storedTheme === 'dark' || (storedTheme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) {
         document.documentElement.classList.add('dark');
       }
+      if (localStorage.getItem('gs-sidebar') === 'collapsed') document.documentElement.dataset.sidebar = 'collapsed';
+    </script>
+    <style is:global>
+      html[data-auth-pending] body {
+        visibility: hidden;
+      }
+    </style>
+    {/* Only a session that passed the emailed code may see the merchant space. */}
+    <script>
+      import { site } from '../data/site';
+      import { getAuthState } from '../lib/auth';
+      import { setDemo } from '../lib/demo';
+      import { fetchShop } from '../lib/shop';
+
+      if (document.documentElement.hasAttribute('data-auth-pending')) {
+        getAuthState().then(async (state) => {
+          if (state.status !== 'granted') return window.location.replace(site.loginUrl);
+          document.documentElement.removeAttribute('data-auth-pending');
+          // The logo may have been changed on another device.
+          const shop = await fetchShop();
+          if (shop) setDemo((demo) => ({ ...demo, settings: { ...demo.settings, logoUrl: shop.logoUrl } }));
+        });
+      }
     </script>
   </head>
   <body class="min-h-dvh bg-canvas text-ink">
@@ -36,11 +61,12 @@ const current = Astro.url.pathname.replace(/\/+$/, '') || '/';
       Aller au contenu
     </a>
     <Sidebar current={current} />
-    <div class="lg:pl-72">
+    <div class="transition-[padding] duration-200 ease-out motion-reduce:transition-none lg:pl-72 lg:rail:pl-20">
       <Topbar client:load current={current} />
       <main id="contenu" class="mx-auto w-full max-w-[96rem] px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-8 lg:pb-16">
         <slot />
       </main>
     </div>
+    <GuidedTour client:idle />
   </body>
 </html>

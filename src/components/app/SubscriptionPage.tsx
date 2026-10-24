@@ -4,7 +4,6 @@ import {
   DAY,
   NOW,
   PLAN_LIMITS,
-  SHOPS,
   formatFullDate,
   formatShortDate,
   type BillingCycle,
@@ -45,7 +44,7 @@ function Subscription() {
   const daysLeft = Math.max(0, Math.ceil((current.expires - NOW) / DAY));
 
   const usage = {
-    shops: SHOPS.length,
+    shops: demo.shops.length,
     users: demo.team.filter((member) => member.status !== 'suspended').length,
     products: demo.products.filter((product) => product.status !== 'archived').length,
   };
@@ -68,16 +67,20 @@ function Subscription() {
             aria-hidden="true"
             className="pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-[radial-gradient(circle,rgb(244_181_44/0.22),transparent_65%)]"
           />
-          <p className="relative text-xs font-bold tracking-[0.14em] text-gold-300 uppercase">Formule actuelle</p>
+          <p className="relative text-xs font-bold tracking-[0.14em] text-gold-300 uppercase">
+            {current.trial ? 'Essai gratuit' : 'Formule actuelle'}
+          </p>
           <h2 id="current-plan" className="relative mt-2 text-3xl font-extrabold tracking-tight">
             {planName(current.id)}
           </h2>
           <p className="relative mt-1 text-white/70">
-            {formatFcfa(price(current.id, current.cycle))} {current.cycle === 'yearly' ? 'par an' : 'par mois'}
+            {current.trial
+              ? 'Toutes les fonctions, sans carte bancaire. Choisissez une formule avant la fin de l’essai.'
+              : `${formatFcfa(price(current.id, current.cycle))} ${current.cycle === 'yearly' ? 'par an' : 'par mois'}`}
           </p>
           <div className="relative mt-6 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-sm text-white/60">Valable jusqu’au</p>
+              <p className="text-sm text-white/60">{current.trial ? 'Essai jusqu’au' : 'Valable jusqu’au'}</p>
               <p className="font-bold">{formatFullDate(current.expires)}</p>
               <p className={`mt-0.5 text-sm ${daysLeft <= 7 ? 'text-gold-300' : 'text-white/60'}`}>
                 Encore {daysLeft} jour{daysLeft > 1 ? 's' : ''}
@@ -88,7 +91,7 @@ function Subscription() {
               className="btn-gold h-11 px-5"
               onClick={() => setCheckout({ plan: current.id, cycle: current.cycle })}
             >
-              Renouveler
+              {current.trial ? 'Garder cette formule' : 'Renouveler'}
             </button>
           </div>
         </section>
@@ -199,6 +202,11 @@ function Subscription() {
 
       <Card title="Factures" className="overflow-hidden" bodyClassName="">
         <ul className="divide-y divide-line border-t border-line">
+          {demo.invoices.length === 0 && (
+            <li className="px-6 py-8 text-center text-sm text-ink-mute">
+              Aucune facture pour l’instant. Chaque paiement d’abonnement apparaîtra ici.
+            </li>
+          )}
           {demo.invoices.map((invoice) => (
             <li key={invoice.id} className="flex flex-wrap items-center gap-x-6 gap-y-1 px-5 py-3.5 sm:px-6">
               <div className="min-w-0 flex-1">
@@ -268,7 +276,7 @@ function CheckoutDialog({
       const sequence = String(current.invoices.length + 1001).padStart(4, '0');
       return {
         ...current,
-        plan: { id: target.plan, cycle: target.cycle, expires: start + period },
+        plan: { id: target.plan, cycle: target.cycle, expires: start + period, trial: false },
         invoices: [
           { id: `F-2026-${sequence}`, at: NOW, plan: planName(target.plan), amount, method, status: 'paid' },
           ...current.invoices,
@@ -276,7 +284,7 @@ function CheckoutDialog({
       };
     });
     onPaid(
-      renewal
+      renewal && !demo.plan.trial
         ? `Paiement reçu. Formule ${planName(target.plan)} prolongée.`
         : `Bienvenue dans la formule ${planName(target.plan)} !`,
     );
@@ -286,7 +294,13 @@ function CheckoutDialog({
     <Modal
       open
       onClose={onClose}
-      title={renewal ? 'Renouveler mon abonnement' : `Passer à ${planName(target.plan)}`}
+      title={
+        demo.plan.trial
+          ? `Choisir la formule ${planName(target.plan)}`
+          : renewal
+            ? 'Renouveler mon abonnement'
+            : `Passer à ${planName(target.plan)}`
+      }
       description={`${formatFcfa(amount)} ${target.cycle === 'yearly' ? 'pour 12 mois' : 'pour 1 mois'}`}
       footer={
         <>

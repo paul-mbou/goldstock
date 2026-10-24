@@ -4,13 +4,21 @@ import {
   ChevronDown,
   CircleAlert,
   CircleCheck,
+  CupSoda,
   Droplet,
+  FlaskConical,
   Footprints,
+  Headphones,
   Minus,
   Plus,
+  Scissors,
   Search,
   Shirt,
+  ShoppingBag,
+  ShoppingBasket,
   Smartphone,
+  Sparkles,
+  Tablet,
   Tag,
   X,
   type LucideIcon,
@@ -111,10 +119,11 @@ export function Delta({ value, suffix }: { value: number; suffix?: string }) {
   return (
     <span className="inline-flex items-center gap-1 text-sm">
       <span
-        className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-bold ${up
+        className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-bold ${
+          up
             ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300'
             : 'bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300'
-          }`}
+        }`}
       >
         <Icon className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
         {up ? '+' : '−'}
@@ -174,7 +183,9 @@ export function StatCard({
           <Icon className="size-[1.125rem]" aria-hidden="true" />
         </span>
       </div>
-      <p className="mt-2 text-lg font-extrabold tracking-tight text-ink tabular-nums sm:mt-3 sm:text-2xl">{value}</p>
+      <p className="mt-2 text-base font-extrabold tracking-tight text-ink tabular-nums min-[380px]:text-lg sm:mt-3 sm:text-2xl">
+        {value}
+      </p>
       {children && <div className="mt-2">{children}</div>}
     </div>
   );
@@ -255,9 +266,17 @@ export const toneStyles: Record<CategoryTone, { tile: string; dot: string; hex: 
 
 export const categoryIcons: Record<CategoryIcon, LucideIcon> = {
   phone: Smartphone,
+  tablet: Tablet,
+  headphones: Headphones,
   shoe: Footprints,
   shirt: Shirt,
+  bag: ShoppingBag,
   drop: Droplet,
+  sparkles: Sparkles,
+  flask: FlaskConical,
+  scissors: Scissors,
+  basket: ShoppingBasket,
+  cup: CupSoda,
   tag: Tag,
 };
 
@@ -350,10 +369,11 @@ function SegmentedRadios<T extends string>({
             role="radio"
             aria-checked={active}
             onClick={() => onChange(option.id)}
-            className={`inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold whitespace-nowrap transition ${active
+            className={`inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold whitespace-nowrap transition ${
+              active
                 ? 'bg-panel text-ink shadow-[0_1px_3px_rgb(13_24_46/0.12)] dark:bg-navy-700'
                 : 'text-ink-mute hover:text-ink'
-              }`}
+            }`}
           >
             {option.label}
             {option.count !== undefined && (
@@ -408,9 +428,10 @@ const controlBase =
   'w-full rounded-xl border bg-panel text-[0.9375rem] text-ink transition placeholder:text-ink-mute/70 focus:ring-4 focus-visible:outline-none';
 
 export const inputClass = (invalid = false) =>
-  `${controlBase} h-11 px-3.5 ${invalid
-    ? 'border-red-400 focus:border-red-500 focus:ring-red-500/15'
-    : 'border-line hover:border-navy-200 focus:border-gold-500 focus:ring-gold-400/25 dark:hover:border-white/20'
+  `${controlBase} h-11 px-3.5 ${
+    invalid
+      ? 'border-red-400 focus:border-red-500 focus:ring-red-500/15'
+      : 'border-line hover:border-navy-200 focus:border-gold-500 focus:ring-gold-400/25 dark:hover:border-white/20'
   }`;
 
 export const textareaClass = `${controlBase} border-line px-3.5 py-3 hover:border-navy-200 focus:border-gold-500 focus:ring-gold-400/25 dark:hover:border-white/20`;
@@ -488,8 +509,9 @@ export function Tabs<T extends string>({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(tab.id)}
-            className={`-mb-px inline-flex h-11 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap transition ${active ? 'border-gold-500 text-ink' : 'border-transparent text-ink-mute hover:text-ink'
-              }`}
+            className={`-mb-px inline-flex h-11 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap transition ${
+              active ? 'border-gold-500 text-ink' : 'border-transparent text-ink-mute hover:text-ink'
+            }`}
           >
             {tab.label}
             {tab.count !== undefined && (

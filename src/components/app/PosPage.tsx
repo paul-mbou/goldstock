@@ -1,10 +1,14 @@
 import {
   Banknote,
   Check,
+  FileText,
   Landmark,
   MessageCircle,
   PackageSearch,
+  Pencil,
+  Plus,
   Printer,
+  RotateCcw,
   ShoppingCart,
   Smartphone,
   Trash2,
@@ -14,7 +18,6 @@ import {
 import { useMemo, useState } from 'react';
 import {
   PAYMENTS,
-  SHOPS,
   formatFcfa,
   formatFullDate,
   formatTime,
@@ -25,9 +28,10 @@ import {
   type Sale,
   type Shop,
 } from '../../data/dashboard';
-import { flatItems, recordSale, useSession, type Item } from '../../lib/demo';
-import { normalize } from './Topbar';
+import { flatItems, recordSale, shopAddress, useSession, type Item } from '../../lib/demo';
+import { InvoiceDialog } from './Invoice';
 import { Screen } from './Screen';
+import { normalize } from './Topbar';
 import {
   CategoryTile,
   EmptyState,
@@ -41,7 +45,8 @@ import {
   inputClass,
 } from './ui';
 
-type CartLine = { vid: string; qty: number };
+/** `price`: unit price agreed with this customer, when it differs from the catalogue. */
+type CartLine = { vid: string; qty: number; price?: number };
 type DiscountMode = 'pct' | 'amount';
 
 export default function PosPage() {
@@ -57,7 +62,7 @@ function Pos() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [chosenShop, setChosenShop] = useState<Shop>('Akwa');
+  const [chosenShop, setChosenShop] = useState<Shop>(demo.shops[0].name);
   const [customer, setCustomer] = useState('');
   const [discountMode, setDiscountMode] = useState<DiscountMode>('pct');
   const [discountInput, setDiscountInput] = useState('');
@@ -81,7 +86,8 @@ function Pos() {
     const item = byId.get(line.vid);
     return item ? [{ ...line, item }] : [];
   });
-  const subtotal = lines.reduce((sum, line) => sum + line.item.variant.price * line.qty, 0);
+  const subtotal = lines.reduce((sum, line) => sum + unitPrice(line) * line.qty, 0);
+  const listSubtotal = lines.reduce((sum, line) => sum + line.item.variant.price * line.qty, 0);
   const count = lines.reduce((sum, line) => sum + line.qty, 0);
   const rawDiscount = Number(discountInput.replace(/\D/g, '')) || 0;
   const discount = Math.min(
@@ -92,6 +98,8 @@ function Pos() {
   const discountError =
     discountPct > role.maxDiscount ? `Votre rôle autorise une remise de ${role.maxDiscount} % au maximum.` : '';
   const total = subtotal - discount;
+  const tooLow =
+    !role.sellBelowCost && lines.some((line) => line.price !== undefined && line.price < line.item.variant.cost);
   const allowNegative = demo.settings.negativeStock;
 
   const add = (item: Item) => {
@@ -110,6 +118,8 @@ function Pos() {
         ? current.filter((line) => line.vid !== vid)
         : current.map((line) => (line.vid === vid ? { ...line, qty } : line)),
     );
+  const setPrice = (vid: string, price: number | undefined) =>
+    setCart((current) => current.map((line) => (line.vid === vid ? { ...line, price } : line)));
 
   const reset = () => {
     setCart([]);
@@ -122,6 +132,7 @@ function Pos() {
       lines={lines}
       count={count}
       subtotal={subtotal}
+      listSubtotal={listSubtotal}
       discount={discount}
       total={total}
       customer={customer}
@@ -131,9 +142,13 @@ function Pos() {
       discountInput={discountInput}
       onDiscountInput={setDiscountInput}
       discountError={discountError}
+      blocked={tooLow}
       maxDiscount={role.maxDiscount}
       allowNegative={allowNegative}
+      sellBelowCost={role.sellBelowCost}
+      showCost={role.costs}
       onQty={setQty}
+      onPrice={setPrice}
       onClear={reset}
       onPay={() => {
         setCartOpen(false);
@@ -152,10 +167,10 @@ function Pos() {
             <SelectBox
               aria-label="Boutique"
               value={chosenShop}
-              onChange={(event) => setChosenShop(event.target.value as Shop)}
+              onChange={(event) => setChosenShop(event.target.value)}
               className="w-48"
             >
-              {SHOPS.map((name) => (
+              {demo.shops.map(({ name }) => (
                 <option key={name} value={name}>
                   Boutique {name}
                 </option>
@@ -180,63 +195,85 @@ function Pos() {
             options={[{ id: 'all', label: 'Tout' }, ...categories.map((item) => ({ id: item.id, label: item.name }))]}
           />
 
-          {visible.length === 0 ? (
+          {demo.products.every((product) => product.status !== 'active') ? (
+            <div className="app-card">
+              <EmptyState icon={PackageSearch} title="Rien à vendre pour l’instant">
+                <p>
+                  Ajoutez d’abord vos produits avec leur prix et leur stock : ils apparaîtront ici, prêts à encaisser.
+                </p>
+                {role.editCatalog && (
+                  <a href="/app/produits/fiche" className="btn-gold mt-5 h-11 px-4">
+                    Ajouter un produit
+                  </a>
+                )}
+              </EmptyState>
+            </div>
+          ) : visible.length === 0 ? (
             <div className="app-card">
               <EmptyState icon={PackageSearch} title="Aucun article trouvé">
                 Vérifiez l’orthographe ou cherchez par référence.
               </EmptyState>
             </div>
           ) : (
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
-              {visible.map((item) => {
-                const inCart = cart.find((line) => line.vid === item.variant.id)?.qty ?? 0;
-                const out = item.variant.stock <= 0;
-                const low = !out && item.variant.stock <= item.product.min;
-                const full = !allowNegative && inCart >= item.variant.stock;
-                return (
-                  <li key={item.key}>
-                    <button
-                      type="button"
-                      onClick={() => add(item)}
-                      disabled={full}
-                      className={`relative flex h-full w-full flex-col rounded-2xl border bg-panel p-3 text-left transition ${
-                        inCart
-                          ? 'border-gold-400 ring-2 ring-gold-400/30'
-                          : 'border-line hover:border-navy-200 hover:shadow-card dark:hover:border-white/20'
-                      } disabled:cursor-not-allowed ${out ? 'opacity-55' : ''}`}
-                    >
-                      <span className="flex items-start justify-between gap-2">
-                        <CategoryTile category={item.category} />
-                        {inCart > 0 && (
-                          <span className="grid size-6 place-items-center rounded-full bg-gold-500 text-xs font-bold text-navy-950">
+            <div className="app-card overflow-hidden">
+              <ul className="divide-y divide-line">
+                {visible.map((item) => {
+                  const inCart = cart.find((line) => line.vid === item.variant.id)?.qty ?? 0;
+                  const out = item.variant.stock <= 0;
+                  const low = !out && item.variant.stock <= item.product.min;
+                  const full = !allowNegative && inCart >= item.variant.stock;
+                  return (
+                    <li key={item.key}>
+                      <button
+                        type="button"
+                        onClick={() => add(item)}
+                        disabled={full}
+                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gold-400 disabled:cursor-not-allowed sm:px-5 ${
+                          inCart ? 'bg-gold-50 dark:bg-gold-400/10' : 'enabled:hover:bg-sunken/60'
+                        } ${out ? 'opacity-55' : ''}`}
+                      >
+                        <CategoryTile category={item.category} size="sm" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-ink">{item.product.name}</span>
+                          <span className="block truncate text-xs text-ink-mute">
+                            {item.variant.label || 'Standard'} · {item.variant.sku}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="block text-sm font-bold text-ink tabular-nums">
+                            {formatFcfa(item.variant.price)}
+                          </span>
+                          <span
+                            className={`block text-xs font-semibold whitespace-nowrap ${
+                              out
+                                ? 'text-red-600 dark:text-red-300'
+                                : low
+                                  ? 'text-gold-700 dark:text-gold-300'
+                                  : 'text-ink-mute'
+                            }`}
+                          >
+                            {out ? 'Rupture' : `${item.variant.stock} dispo.`}
+                          </span>
+                        </span>
+                        {inCart > 0 ? (
+                          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-gold-500 text-sm font-bold text-navy-950 tabular-nums">
                             {inCart}
                             <span className="sr-only"> dans le panier</span>
                           </span>
+                        ) : (
+                          <span
+                            className={`grid size-8 shrink-0 place-items-center rounded-full border border-line text-ink-soft ${full ? 'invisible' : ''}`}
+                            aria-hidden="true"
+                          >
+                            <Plus className="size-4" />
+                          </span>
                         )}
-                      </span>
-                      <span className="mt-3 line-clamp-2 text-sm font-semibold text-ink">{item.product.name}</span>
-                      <span className="mt-0.5 truncate text-xs text-ink-mute">{item.variant.label || 'Standard'}</span>
-                      <span className="mt-auto flex items-end justify-between gap-2 pt-3">
-                        <span className="text-sm font-bold text-ink tabular-nums">
-                          {formatFcfa(item.variant.price)}
-                        </span>
-                        <span
-                          className={`text-xs font-semibold whitespace-nowrap ${
-                            out
-                              ? 'text-red-600 dark:text-red-300'
-                              : low
-                                ? 'text-gold-700 dark:text-gold-300'
-                                : 'text-ink-mute'
-                          }`}
-                        >
-                          {out ? 'Rupture' : `${item.variant.stock} dispo.`}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
         </section>
 
@@ -293,10 +330,13 @@ function Pos() {
 
 /* ------------------------------------------------------------------ cart */
 
+const unitPrice = (line: CartLine & { item: Item }) => line.price ?? line.item.variant.price;
+
 function CartPanel({
   lines,
   count,
   subtotal,
+  listSubtotal,
   discount,
   total,
   customer,
@@ -306,15 +346,20 @@ function CartPanel({
   discountInput,
   onDiscountInput,
   discountError,
+  blocked,
   maxDiscount,
   allowNegative,
+  sellBelowCost,
+  showCost,
   onQty,
+  onPrice,
   onClear,
   onPay,
 }: {
   lines: (CartLine & { item: Item })[];
   count: number;
   subtotal: number;
+  listSubtotal: number;
   discount: number;
   total: number;
   customer: string;
@@ -324,9 +369,14 @@ function CartPanel({
   discountInput: string;
   onDiscountInput: (value: string) => void;
   discountError: string;
+  /** A line is priced below what this role may sell at. */
+  blocked: boolean;
   maxDiscount: number;
   allowNegative: boolean;
+  sellBelowCost: boolean;
+  showCost: boolean;
   onQty: (vid: string, qty: number) => void;
+  onPrice: (vid: string, price: number | undefined) => void;
   onClear: () => void;
   onPay: () => void;
 }) {
@@ -358,36 +408,43 @@ function CartPanel({
         </EmptyState>
       ) : (
         <ul className="max-h-[22rem] divide-y divide-line overflow-y-auto">
-          {lines.map(({ vid, qty, item }) => (
-            <li key={vid} className="flex gap-3 px-5 py-3.5">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-ink">{item.product.name}</p>
-                <p className="truncate text-xs text-ink-mute">
-                  {item.variant.label ? `${item.variant.label} · ` : ''}
-                  {formatFcfa(item.variant.price)}
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <Stepper
-                    size="sm"
-                    label={`Quantité de ${item.full}`}
-                    value={qty}
-                    min={1}
-                    max={allowNegative ? 99 : item.variant.stock}
-                    onChange={(value) => onQty(vid, value)}
+          {lines.map((line) => {
+            const { vid, qty, item } = line;
+            return (
+              <li key={vid} className="flex gap-3 px-5 py-3.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink">{item.product.name}</p>
+                  {item.variant.label && <p className="truncate text-xs text-ink-mute">{item.variant.label}</p>}
+                  <PriceEditor
+                    item={item}
+                    price={unitPrice(line)}
+                    sellBelowCost={sellBelowCost}
+                    showCost={showCost}
+                    onChange={(price) => onPrice(vid, price)}
                   />
-                  <button
-                    type="button"
-                    onClick={() => onQty(vid, 0)}
-                    aria-label={`Retirer ${item.full}`}
-                    className="grid size-8 place-items-center rounded-lg text-ink-mute transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-400/10"
-                  >
-                    <Trash2 className="size-4" aria-hidden="true" />
-                  </button>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Stepper
+                      size="sm"
+                      label={`Quantité de ${item.full}`}
+                      value={qty}
+                      min={1}
+                      max={allowNegative ? 99 : item.variant.stock}
+                      onChange={(value) => onQty(vid, value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onQty(vid, 0)}
+                      aria-label={`Retirer ${item.full}`}
+                      className="grid size-8 place-items-center rounded-lg text-ink-mute transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-400/10"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <p className="text-sm font-bold text-ink tabular-nums">{formatFcfa(item.variant.price * qty)}</p>
-            </li>
-          ))}
+                <p className="text-sm font-bold text-ink tabular-nums">{formatFcfa(unitPrice(line) * qty)}</p>
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -458,6 +515,12 @@ function CartPanel({
           ))}
 
         <dl className="space-y-1.5 text-sm">
+          {listSubtotal !== subtotal && (
+            <div className="flex justify-between text-ink-mute">
+              <dt>Prix catalogue</dt>
+              <dd className="tabular-nums line-through">{formatFcfa(listSubtotal)}</dd>
+            </div>
+          )}
           <div className="flex justify-between text-ink-soft">
             <dt>Sous-total</dt>
             <dd className="tabular-nums">{formatFcfa(subtotal)}</dd>
@@ -477,13 +540,131 @@ function CartPanel({
         <button
           type="button"
           className="btn-gold h-12 w-full"
-          disabled={!lines.length || Boolean(discountError)}
+          disabled={!lines.length || Boolean(discountError) || blocked}
           onClick={onPay}
         >
           <Banknote className="size-5" aria-hidden="true" />
           Encaisser
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Unit price of one cart line, editable for this sale only: the catalogue price stays as it is. */
+function PriceEditor({
+  item,
+  price,
+  sellBelowCost,
+  showCost,
+  onChange,
+}: {
+  item: Item;
+  price: number;
+  sellBelowCost: boolean;
+  showCost: boolean;
+  onChange: (price: number | undefined) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+  const { price: list, cost } = item.variant;
+  const changed = price !== list;
+  const inputId = `pos-price-${item.variant.id}`;
+
+  const start = () => {
+    setDraft(String(price));
+    setError('');
+    setEditing(true);
+  };
+  const apply = (value: number | undefined) => {
+    onChange(value === list ? undefined : value);
+    setEditing(false);
+  };
+  const commit = () => {
+    const value = Number(draft) || 0;
+    if (value <= 0) return setError('Indiquez le prix de vente.');
+    if (value < cost && value !== list && !sellBelowCost)
+      return setError(
+        showCost
+          ? `En dessous du prix d’achat (${formatFcfa(cost)}) : seul le propriétaire peut vendre à perte.`
+          : 'Prix trop bas pour cet article. Demandez au propriétaire.',
+      );
+    apply(value);
+  };
+
+  if (!editing)
+    return (
+      <div className="mt-0.5">
+        <button
+          type="button"
+          onClick={start}
+          aria-label={`Changer le prix de ${item.full} pour cette vente, actuellement ${formatFcfa(price)}`}
+          className="-mx-1 inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-ink-mute transition hover:bg-sunken hover:text-ink"
+        >
+          {changed && <s className="tabular-nums">{formatFcfa(list)}</s>}
+          <span className={`tabular-nums ${changed ? 'font-bold text-gold-700 dark:text-gold-300' : ''}`}>
+            {formatFcfa(price)}
+          </span>
+          <Pencil className="size-3 shrink-0" aria-hidden="true" />
+        </button>
+        {changed && price < cost && (sellBelowCost ? showCost : true) && (
+          <p className="text-xs font-semibold text-red-600 dark:text-red-400">
+            {sellBelowCost ? 'Vendu à perte' : 'Prix trop bas : changez-le pour encaisser'}
+          </p>
+        )}
+      </div>
+    );
+
+  return (
+    <div className="mt-1.5">
+      <label htmlFor={inputId} className="sr-only">
+        Prix unitaire pour cette vente (FCFA)
+      </label>
+      <div className="flex items-center gap-1.5">
+        <input
+          id={inputId}
+          autoFocus
+          inputMode="numeric"
+          className={`${inputClass(Boolean(error))} min-w-0 flex-1`}
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value.replace(/[^\d]/g, ''));
+            setError('');
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commit();
+            } else if (event.key === 'Escape') {
+              event.preventDefault();
+              event.stopPropagation();
+              setEditing(false);
+            }
+          }}
+          aria-invalid={Boolean(error) || undefined}
+          aria-describedby={`${inputId}-help`}
+        />
+        <button type="button" className="btn-gold h-11 shrink-0 px-3 text-sm" onClick={commit}>
+          OK
+        </button>
+        {changed && (
+          <button
+            type="button"
+            className="btn-quiet grid h-11 w-11 shrink-0 place-items-center p-0"
+            aria-label={`Revenir au prix catalogue (${formatFcfa(list)})`}
+            onClick={() => apply(undefined)}
+          >
+            <RotateCcw className="size-4" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      <p
+        id={`${inputId}-help`}
+        className={`mt-1 text-xs ${error ? 'font-medium text-red-600 dark:text-red-400' : 'text-ink-mute'}`}
+      >
+        {error || `Prix catalogue : ${formatFcfa(list)}. Il ne change pas.`}
+      </p>
     </div>
   );
 }
@@ -648,6 +829,7 @@ function PaymentDialog({
 
 export function ReceiptDialog({ sale, onClose }: { sale: Sale | null; onClose: () => void }) {
   const { demo } = useSession();
+  const [invoicing, setInvoicing] = useState(false);
   if (!sale) return null;
   const total = saleNet(sale);
   const text = [
@@ -665,34 +847,41 @@ export function ReceiptDialog({ sale, onClose }: { sale: Sale | null; onClose: (
     .join('\n');
 
   return (
-    <Modal
-      open
-      onClose={onClose}
-      title="Vente encaissée"
-      description={`${sale.id} · ${formatFcfa(total)} · ${payLabel(sale.pay)}`}
-      footer={
-        <>
-          <a
-            href={`https://wa.me/?text=${encodeURIComponent(text)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-quiet mr-auto h-11 px-4"
-          >
-            <MessageCircle className="size-[1.125rem]" aria-hidden="true" />
-            WhatsApp
-          </a>
-          <button type="button" className="btn-quiet h-11 px-4" onClick={() => window.print()}>
-            <Printer className="size-[1.125rem]" aria-hidden="true" />
-            Imprimer
-          </button>
-          <button type="button" className="btn-gold h-11 px-5" onClick={onClose}>
-            Nouvelle vente
-          </button>
-        </>
-      }
-    >
-      <Receipt sale={sale} />
-    </Modal>
+    <>
+      <Modal
+        open
+        onClose={onClose}
+        title="Vente encaissée"
+        description={`${sale.id} · ${formatFcfa(total)} · ${payLabel(sale.pay)}`}
+        footer={
+          <>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(text)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-quiet mr-auto h-11 px-4"
+            >
+              <MessageCircle className="size-[1.125rem]" aria-hidden="true" />
+              WhatsApp
+            </a>
+            <button type="button" className="btn-quiet h-11 px-4" onClick={() => setInvoicing(true)}>
+              <FileText className="size-[1.125rem]" aria-hidden="true" />
+              Facture
+            </button>
+            <button type="button" className="btn-quiet h-11 px-4" onClick={() => window.print()}>
+              <Printer className="size-[1.125rem]" aria-hidden="true" />
+              Imprimer
+            </button>
+            <button type="button" className="btn-gold h-11 px-5" onClick={onClose}>
+              Nouvelle vente
+            </button>
+          </>
+        }
+      >
+        {!invoicing && <Receipt sale={sale} />}
+      </Modal>
+      {invoicing && <InvoiceDialog sale={sale} onClose={() => setInvoicing(false)} />}
+    </>
   );
 }
 
@@ -704,9 +893,12 @@ export function Receipt({ sale }: { sale: Sale }) {
       data-print
       className="mx-auto max-w-xs rounded-xl border border-dashed border-line bg-white px-5 py-6 font-mono text-[0.8125rem] leading-relaxed text-navy-900"
     >
+      {demo.settings.showLogo && demo.settings.logoUrl && (
+        <img src={demo.settings.logoUrl} alt="" className="mx-auto mb-2 max-h-16 max-w-32 object-contain" />
+      )}
       <p className="text-center text-base font-bold">{demo.settings.shopName}</p>
       <p className="text-center text-xs">
-        {sale.shop} · {demo.settings.addresses[sale.shop]}
+        {sale.shop} · {shopAddress(demo, sale.shop)}
       </p>
       <p className="text-center text-xs">{demo.settings.phone}</p>
       <div className="my-3 border-t border-dashed border-navy-300" />

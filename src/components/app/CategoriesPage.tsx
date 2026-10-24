@@ -1,6 +1,15 @@
 import { Archive, ArchiveRestore, ChevronRight, Layers, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
-import { ATTR_TYPES, type AttrType, type Category, type CategoryIcon, type Tone } from '../../data/dashboard';
+import {
+  ATTR_TYPES,
+  type AttrType,
+  type AttrValue,
+  type Attribute,
+  type Category,
+  type CategoryIcon,
+  type Product,
+  type Tone,
+} from '../../data/dashboard';
 import { logActivity, setDemo, useSession } from '../../lib/demo';
 import { Screen } from './Screen';
 import {
@@ -36,7 +45,7 @@ function updateCategory(id: string, patch: (category: Category) => Category) {
 }
 
 function Categories() {
-  const { demo, role, member } = useSession();
+  const { demo, business, role, member } = useSession();
   const [selectedId, setSelectedId] = useState(demo.categories[0]?.id ?? '');
   const [creating, setCreating] = useState(false);
   const { notify, region } = useToasts();
@@ -48,7 +57,7 @@ function Categories() {
     <div className="space-y-6">
       <PageHeader
         title="Catégories"
-        description="Chaque catégorie définit les champs proposés à la création d’un produit."
+        description={`Les catégories de votre activité « ${business.label} ». Chacune définit les champs proposés à la création d’un produit.`}
         actions={
           editable && (
             <button type="button" className="btn-gold h-11 px-4" onClick={() => setCreating(true)}>
@@ -147,6 +156,7 @@ function CategoryHeader({
   onRename: (name: string) => void;
   onArchive: () => void;
 }) {
+  const { business } = useSession();
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(category.name);
   const [sub, setSub] = useState('');
@@ -243,7 +253,7 @@ function CategoryHeader({
             <input
               aria-label="Nouvelle sous-catégorie"
               className={inputClass()}
-              placeholder="Ex. Tablettes, Sacs, Parfums…"
+              placeholder={business.samples.sub}
               value={sub}
               onChange={(event) => setSub(event.target.value)}
             />
@@ -257,6 +267,70 @@ function CategoryHeader({
   );
 }
 
+type AttrDraft = { name: string; type: AttrType; options: string; variant: boolean; required: boolean };
+type DraftError = { field: 'name' | 'options'; message: string };
+
+const emptyDraft: AttrDraft = { name: '', type: 'list', options: '', variant: false, required: false };
+
+const draftOf = (attribute: Attribute): AttrDraft => ({
+  name: attribute.name,
+  type: attribute.type,
+  options: attribute.options.join(', '),
+  variant: attribute.variant,
+  required: attribute.required,
+});
+
+const splitOptions = (text: string) => [
+  ...new Set(
+    text
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
+  ),
+];
+
+/** `others`: the category's other characteristics, whose names must stay distinct. */
+function readDraft(
+  draft: AttrDraft,
+  others: Attribute[],
+): { error: DraftError } | { fields: Omit<Attribute, 'id' | 'hint'> } {
+  const name = draft.name.trim();
+  const options = splitOptions(draft.options);
+  if (name.length < 2) return { error: { field: 'name', message: 'Donnez un nom à la caractéristique.' } };
+  if (others.some((item) => item.name.toLowerCase() === name.toLowerCase()))
+    return { error: { field: 'name', message: 'Cette catégorie a déjà une caractéristique de ce nom.' } };
+  if (withOptions.includes(draft.type) && options.length < 2)
+    return { error: { field: 'options', message: 'Indiquez au moins deux valeurs, séparées par des virgules.' } };
+  return {
+    fields: {
+      name,
+      type: draft.type,
+      options: withOptions.includes(draft.type) ? options : [],
+      variant: canVary.includes(draft.type) && draft.variant,
+      required: draft.required,
+    },
+  };
+}
+
+const hasValue = (value: AttrValue | undefined) =>
+  value !== undefined && value !== '' && !(Array.isArray(value) && !value.length);
+
+/** Products of the category that carry the characteristic (or one `value` of it), as a field or in a variant. */
+function productsUsing(products: Product[], categoryId: string, attribute: Attribute, value?: string) {
+  return products.filter((product) => {
+    if (product.cat !== categoryId) return false;
+    if (attribute.variant)
+      return product.variants.some((variant) =>
+        variant.label.split(' · ').some((part) => (value ? part === value : attribute.options.includes(part))),
+      );
+    const current = product.attrs[attribute.id];
+    if (value === undefined) return hasValue(current);
+    return Array.isArray(current) ? current.includes(value) : current === value;
+  });
+}
+
+const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
+
 function Attributes({
   category,
   editable,
@@ -264,45 +338,50 @@ function Attributes({
 }: {
   category: Category;
   editable: boolean;
-  onNotify: (message: string) => void;
+  onNotify: ReturnType<typeof useToasts>['notify'];
 }) {
-  const [name, setName] = useState('');
-  const [type, setType] = useState<AttrType>('list');
-  const [options, setOptions] = useState('');
-  const [variant, setVariant] = useState(false);
-  const [required, setRequired] = useState(false);
-  const [error, setError] = useState('');
+  const { demo } = useSession();
+  const [draft, setDraft] = useState<AttrDraft>(emptyDraft);
+  const [error, setError] = useState<DraftError | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = category.attrs.find((item) => item.id === editingId);
   const typeLabel = (id: AttrType) => ATTR_TYPES.find((item) => item.id === id)!.label;
 
   const add = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const values = options
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean);
-    if (name.trim().length < 2) return setError('Donnez un nom à la caractéristique.');
-    if (withOptions.includes(type) && values.length < 2)
-      return setError('Indiquez au moins deux valeurs, séparées par des virgules.');
+    const result = readDraft(draft, category.attrs);
+    if ('error' in result) {
+      setError(result.error);
+      document.getElementById(`attr-new-${result.error.field}`)?.focus();
+      return;
+    }
     updateCategory(category.id, (current) => ({
       ...current,
-      attrs: [
-        ...current.attrs,
-        {
-          id: `${current.id}_${Date.now().toString(36)}`,
-          name: name.trim(),
-          type,
-          options: withOptions.includes(type) ? values : [],
-          variant: canVary.includes(type) && variant,
-          required,
-        },
-      ],
+      attrs: [...current.attrs, { id: `${current.id}_${Date.now().toString(36)}`, ...result.fields }],
     }));
-    onNotify(`« ${name.trim()} » ajoutée à ${category.name}.`);
-    setName('');
-    setOptions('');
-    setVariant(false);
-    setRequired(false);
-    setError('');
+    onNotify(`« ${result.fields.name} » ajoutée à ${category.name}.`);
+    setDraft(emptyDraft);
+    setError(null);
+  };
+
+  const remove = (attribute: Attribute) => {
+    const index = category.attrs.findIndex((item) => item.id === attribute.id);
+    updateCategory(category.id, (current) => ({
+      ...current,
+      attrs: current.attrs.filter((item) => item.id !== attribute.id),
+    }));
+    onNotify(`« ${attribute.name} » supprimée. Les produits existants gardent leur valeur.`, {
+      action: {
+        label: 'Annuler',
+        run: () =>
+          updateCategory(category.id, (current) => {
+            if (current.attrs.some((item) => item.id === attribute.id)) return current;
+            const attrs = [...current.attrs];
+            attrs.splice(index, 0, attribute);
+            return { ...current, attrs };
+          }),
+      },
+    });
   };
 
   return (
@@ -340,20 +419,24 @@ function Attributes({
                   <Badge tone="navy">Descriptive</Badge>
                 )}
                 {editable && (
-                  <button
-                    type="button"
-                    aria-label={`Supprimer ${attribute.name}`}
-                    onClick={() => {
-                      updateCategory(category.id, (current) => ({
-                        ...current,
-                        attrs: current.attrs.filter((item) => item.id !== attribute.id),
-                      }));
-                      onNotify(`« ${attribute.name} » retirée. Les produits existants gardent leur valeur.`);
-                    }}
-                    className="ml-auto grid size-9 place-items-center rounded-lg text-ink-mute transition hover:bg-red-50 hover:text-red-600 sm:ml-0 dark:hover:bg-red-400/10"
-                  >
-                    <Trash2 className="size-4" aria-hidden="true" />
-                  </button>
+                  <span className="ml-auto flex sm:ml-0">
+                    <button
+                      type="button"
+                      aria-label={`Modifier ${attribute.name}`}
+                      onClick={() => setEditingId(attribute.id)}
+                      className="grid size-9 place-items-center rounded-lg text-ink-mute transition hover:bg-sunken hover:text-ink"
+                    >
+                      <Pencil className="size-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Supprimer ${attribute.name}`}
+                      onClick={() => remove(attribute)}
+                      className="grid size-9 place-items-center rounded-lg text-ink-mute transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-400/10"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </button>
+                  </span>
                 )}
               </div>
             </li>
@@ -367,78 +450,16 @@ function Attributes({
       {editable && (
         <Card title={`Ajouter une caractéristique à « ${category.name} »`}>
           <form noValidate onSubmit={add} className="space-y-5">
-            <FormField id="attr-name" label="Nom" error={error}>
-              <input
-                id="attr-name"
-                className={inputClass(Boolean(error))}
-                placeholder="Ex. Garantie, Matière, Capacité de batterie"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </FormField>
-            <fieldset>
-              <legend className="mb-1.5 text-sm font-semibold text-ink">Type de champ</legend>
-              <div className="flex flex-wrap gap-2">
-                {ATTR_TYPES.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-pressed={type === item.id}
-                    onClick={() => setType(item.id)}
-                    className="h-9 rounded-full border border-line px-3.5 text-sm font-semibold text-ink-soft transition hover:border-navy-200 aria-pressed:border-navy-900 aria-pressed:bg-navy-900 aria-pressed:text-white dark:hover:border-white/20 dark:aria-pressed:border-gold-400 dark:aria-pressed:bg-gold-400 dark:aria-pressed:text-navy-950"
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            {withOptions.includes(type) && (
-              <FormField id="attr-options" label="Valeurs possibles" hint="Séparées par des virgules.">
-                <input
-                  id="attr-options"
-                  className={inputClass()}
-                  placeholder="Ex. 6 mois, 12 mois, 24 mois"
-                  value={options}
-                  onChange={(event) => setOptions(event.target.value)}
-                />
-              </FormField>
-            )}
-            {canVary.includes(type) && (
-              <fieldset>
-                <legend className="mb-1.5 text-sm font-semibold text-ink">Utilisation</legend>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {(
-                    [
-                      [false, 'Descriptive', 'Information affichée sur la fiche (marque, matière…).'],
-                      [true, 'Crée des variantes', 'Chaque valeur a son stock, sa référence et son prix.'],
-                    ] as const
-                  ).map(([value, label, text]) => (
-                    <label
-                      key={label}
-                      className="flex cursor-pointer gap-3 rounded-xl border border-line p-3 transition hover:border-navy-200 has-checked:border-gold-500 has-checked:bg-gold-50 dark:hover:border-white/20 dark:has-checked:bg-gold-400/10"
-                    >
-                      <input
-                        type="radio"
-                        name="attr-usage"
-                        checked={variant === value}
-                        onChange={() => setVariant(value)}
-                        className="mt-1 accent-gold-500"
-                      />
-                      <span>
-                        <span className="block text-sm font-bold text-ink">{label}</span>
-                        <span className="block text-sm text-ink-mute">{text}</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            )}
-            <div className="flex items-center gap-3">
-              <Switch checked={required} onChange={setRequired} labelledBy="attr-required" />
-              <span id="attr-required" className="text-sm font-semibold text-ink">
-                Champ obligatoire
-              </span>
-            </div>
+            <AttributeFields
+              idPrefix="attr-new"
+              draft={draft}
+              error={error}
+              locked={false}
+              onChange={(patch) => {
+                setDraft((current) => ({ ...current, ...patch }));
+                setError(null);
+              }}
+            />
             <button type="submit" className="btn-gold h-11 px-5">
               <Plus className="size-[1.125rem]" strokeWidth={2.5} aria-hidden="true" />
               Ajouter la caractéristique
@@ -446,7 +467,213 @@ function Attributes({
           </form>
         </Card>
       )}
+
+      {editing && (
+        <EditAttributeDialog
+          key={editing.id}
+          category={category}
+          attribute={editing}
+          products={demo.products}
+          onClose={() => setEditingId(null)}
+          onSaved={(name) => {
+            setEditingId(null);
+            onNotify(`« ${name} » mise à jour.`);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function AttributeFields({
+  idPrefix,
+  draft,
+  error,
+  locked,
+  onChange,
+}: {
+  idPrefix: string;
+  draft: AttrDraft;
+  error: DraftError | null;
+  /** Type and usage stay frozen once products rely on the characteristic. */
+  locked: boolean;
+  onChange: (patch: Partial<AttrDraft>) => void;
+}) {
+  const nameError = error?.field === 'name' ? error.message : undefined;
+  const optionsError = error?.field === 'options' ? error.message : undefined;
+
+  return (
+    <>
+      <FormField id={`${idPrefix}-name`} label="Nom" error={nameError}>
+        <input
+          id={`${idPrefix}-name`}
+          className={inputClass(Boolean(nameError))}
+          placeholder="Ex. Garantie, Matière, Capacité de batterie"
+          value={draft.name}
+          onChange={(event) => onChange({ name: event.target.value })}
+        />
+      </FormField>
+      <fieldset disabled={locked}>
+        <legend className="mb-1.5 text-sm font-semibold text-ink">Type de champ</legend>
+        <div className="flex flex-wrap gap-2">
+          {ATTR_TYPES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-pressed={draft.type === item.id}
+              onClick={() => onChange({ type: item.id })}
+              className="h-9 rounded-full border border-line px-3.5 text-sm font-semibold text-ink-soft transition hover:border-navy-200 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-line aria-pressed:border-navy-900 aria-pressed:bg-navy-900 aria-pressed:text-white disabled:aria-pressed:opacity-100 dark:hover:border-white/20 dark:aria-pressed:border-gold-400 dark:aria-pressed:bg-gold-400 dark:aria-pressed:text-navy-950"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      {withOptions.includes(draft.type) && (
+        <FormField
+          id={`${idPrefix}-options`}
+          label="Valeurs possibles"
+          hint="Séparées par des virgules."
+          error={optionsError}
+        >
+          <input
+            id={`${idPrefix}-options`}
+            className={inputClass(Boolean(optionsError))}
+            placeholder="Ex. 6 mois, 12 mois, 24 mois"
+            value={draft.options}
+            onChange={(event) => onChange({ options: event.target.value })}
+          />
+        </FormField>
+      )}
+      {canVary.includes(draft.type) && (
+        <fieldset disabled={locked}>
+          <legend className="mb-1.5 text-sm font-semibold text-ink">Utilisation</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(
+              [
+                [false, 'Descriptive', 'Information affichée sur la fiche (marque, matière…).'],
+                [true, 'Crée des variantes', 'Chaque valeur a son stock, sa référence et son prix.'],
+              ] as const
+            ).map(([value, label, text]) => (
+              <label
+                key={label}
+                className={`flex gap-3 rounded-xl border border-line p-3 transition has-checked:border-gold-500 has-checked:bg-gold-50 dark:has-checked:bg-gold-400/10 ${
+                  locked
+                    ? 'cursor-not-allowed not-has-checked:opacity-45'
+                    : 'cursor-pointer hover:border-navy-200 dark:hover:border-white/20'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`${idPrefix}-usage`}
+                  checked={draft.variant === value}
+                  onChange={() => onChange({ variant: value })}
+                  className="mt-1 accent-gold-500"
+                />
+                <span>
+                  <span className="block text-sm font-bold text-ink">{label}</span>
+                  <span className="block text-sm text-ink-mute">{text}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      <div className="flex items-center gap-3">
+        <Switch
+          checked={draft.required}
+          onChange={(required) => onChange({ required })}
+          labelledBy={`${idPrefix}-required`}
+        />
+        <span id={`${idPrefix}-required`} className="text-sm font-semibold text-ink">
+          Champ obligatoire
+        </span>
+      </div>
+    </>
+  );
+}
+
+function EditAttributeDialog({
+  category,
+  attribute,
+  products,
+  onClose,
+  onSaved,
+}: {
+  category: Category;
+  attribute: Attribute;
+  products: Product[];
+  onClose: () => void;
+  onSaved: (name: string) => void;
+}) {
+  const [draft, setDraft] = useState(() => draftOf(attribute));
+  const [error, setError] = useState<DraftError | null>(null);
+  const inUse = productsUsing(products, category.id, attribute).length;
+  const kept = splitOptions(draft.options);
+  const droppedInUse = attribute.options
+    .filter((value) => !kept.includes(value))
+    .map((value) => ({ value, count: productsUsing(products, category.id, attribute, value).length }))
+    .filter((item) => item.count > 0);
+
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const result = readDraft(
+      draft,
+      category.attrs.filter((item) => item.id !== attribute.id),
+    );
+    if ('error' in result) {
+      setError(result.error);
+      document.getElementById(`attr-edit-${result.error.field}`)?.focus();
+      return;
+    }
+    updateCategory(category.id, (current) => ({
+      ...current,
+      attrs: current.attrs.map((item) => (item.id === attribute.id ? { ...item, ...result.fields } : item)),
+    }));
+    onSaved(result.fields.name);
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Modifier « ${attribute.name} »`}
+      description={
+        inUse
+          ? `Utilisée par ${plural(inUse, 'produit')} : son type et son utilisation ne peuvent plus changer.`
+          : `Caractéristique de la catégorie « ${category.name} ».`
+      }
+      footer={
+        <>
+          <button type="button" className="btn-quiet h-11 px-4" onClick={onClose}>
+            Annuler
+          </button>
+          <button type="submit" form="edit-attribute" className="btn-gold h-11 px-5">
+            Enregistrer
+          </button>
+        </>
+      }
+    >
+      <form id="edit-attribute" noValidate onSubmit={submit} className="space-y-5">
+        <AttributeFields
+          idPrefix="attr-edit"
+          draft={draft}
+          error={error}
+          locked={inUse > 0}
+          onChange={(patch) => {
+            setDraft((current) => ({ ...current, ...patch }));
+            setError(null);
+          }}
+        />
+        {droppedInUse.length > 0 && (
+          <p role="status" className="rounded-xl bg-gold-50 px-4 py-3 text-sm text-ink-soft dark:bg-gold-400/10">
+            {droppedInUse.map((item) => `« ${item.value} » (${plural(item.count, 'produit')})`).join(', ')} :{' '}
+            {droppedInUse.length > 1 ? 'ces valeurs ne seront plus proposées' : 'cette valeur ne sera plus proposée'}{' '}
+            pour les nouveaux produits. Les produits existants {droppedInUse.length > 1 ? 'les' : 'la'} gardent.
+          </p>
+        )}
+      </form>
+    </Modal>
   );
 }
 
@@ -454,9 +681,17 @@ const iconChoices = Object.keys(categoryIcons) as CategoryIcon[];
 const toneChoices = Object.keys(toneStyles) as Tone[];
 const iconNames: Record<CategoryIcon, string> = {
   phone: 'téléphone',
+  tablet: 'tablette',
+  headphones: 'écouteurs',
   shoe: 'chaussure',
   shirt: 'vêtement',
+  bag: 'sac',
   drop: 'goutte',
+  sparkles: 'étincelles',
+  flask: 'flacon',
+  scissors: 'ciseaux',
+  basket: 'panier',
+  cup: 'boisson',
   tag: 'étiquette',
 };
 const toneNames: Record<Tone, string> = {
@@ -476,6 +711,7 @@ function NewCategoryDialog({
   onClose: () => void;
   onCreate: (category: Category) => void;
 }) {
+  const { business } = useSession();
   const [name, setName] = useState('');
   const [icon, setIcon] = useState<CategoryIcon>('tag');
   const [tone, setTone] = useState<Tone>('violet');
@@ -509,7 +745,7 @@ function NewCategoryDialog({
       open={open}
       onClose={onClose}
       title="Nouvelle catégorie"
-      description="Vous ajouterez ses caractéristiques juste après."
+      description={`Elle reste dans votre activité « ${business.label} ». Vous ajouterez ses caractéristiques juste après.`}
       footer={
         <>
           <button type="button" className="btn-quiet h-11 px-4" onClick={onClose}>
@@ -531,7 +767,7 @@ function NewCategoryDialog({
           <input
             id="category-name"
             className={inputClass(Boolean(error))}
-            placeholder="Ex. Sacs et accessoires"
+            placeholder={business.samples.category}
             value={name}
             onChange={(event) => setName(event.target.value)}
           />

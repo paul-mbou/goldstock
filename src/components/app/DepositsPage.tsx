@@ -1,16 +1,36 @@
-import { CircleCheck, ClipboardCheck, Flag, HandCoins, Scale, TriangleAlert } from 'lucide-react';
-import { useState } from 'react';
+import { CircleCheck, ClipboardCheck, Flag, HandCoins, Plus, Scale, TriangleAlert } from 'lucide-react';
+import { useState, type SubmitEvent } from 'react';
 import {
+  DAY,
+  PAYMENTS,
+  TODAY_START,
+  cashSalesTotal,
   formatFcfa,
   formatFullDate,
+  formatLongDay,
   formatShortDate,
   formatTime,
+  payLabel,
   type Deposit,
   type DepositStatus,
+  type PayId,
 } from '../../data/dashboard';
-import { logActivity, setDemo, useSession } from '../../lib/demo';
+import { declareDeposit, logActivity, setDemo, undeclaredDays, useSession, withdrawDeposit } from '../../lib/demo';
 import { Screen } from './Screen';
-import { Badge, EmptyState, Modal, PageHeader, Segmented, StatCard, StatusBadge, textareaClass, useToasts } from './ui';
+import {
+  Badge,
+  EmptyState,
+  FormField,
+  Modal,
+  PageHeader,
+  Segmented,
+  SelectBox,
+  StatCard,
+  StatusBadge,
+  inputClass,
+  textareaClass,
+  useToasts,
+} from './ui';
 
 type Filter = 'all' | DepositStatus;
 
@@ -43,8 +63,12 @@ const replaceDeposit = (deposit: Deposit) =>
 function Deposits() {
   const { demo, roleId, member } = useSession();
   const canReview = roleId === 'owner';
+  const canDeclare = roleId === 'manager';
+  const ownShops = member.shop === 'Toutes' ? demo.shops.map((shop) => shop.name) : [member.shop];
+  const owner = demo.team.find((item) => item.role === 'owner');
   const list = canReview ? demo.deposits : demo.deposits.filter((deposit) => deposit.manager === member.name);
   const [filter, setFilter] = useState<Filter>(canReview ? 'pending' : 'all');
+  const [declaring, setDeclaring] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const reviewing = list.find((deposit) => deposit.id === reviewingId) ?? null;
   const setReviewing = (deposit: Deposit | null) => setReviewingId(deposit?.id ?? null);
@@ -77,6 +101,15 @@ function Deposits() {
     );
   };
 
+  const declared = (deposit: Deposit) => {
+    setDeclaring(false);
+    setFilter('all');
+    notify(
+      `Versement de ${formatFcfa(deposit.deposited)} déclaré.${owner ? ` ${owner.name.split(' ')[0]} va le vérifier.` : ''}`,
+      { action: { label: 'Annuler', run: () => withdrawDeposit(deposit.id) } },
+    );
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -84,7 +117,15 @@ function Deposits() {
         description={
           canReview
             ? 'Rapprochez chaque soir l’argent remis par vos gérants des ventes en espèces de leur boutique.'
-            : 'L’argent remis chaque soir pour les ventes en espèces de votre boutique, et sa vérification.'
+            : 'Déclarez chaque soir l’argent remis au propriétaire pour les ventes en espèces, puis suivez sa vérification.'
+        }
+        actions={
+          canDeclare && (
+            <button type="button" className="btn-gold h-11 px-4" onClick={() => setDeclaring(true)}>
+              <Plus className="size-[1.125rem]" strokeWidth={2.5} aria-hidden="true" />
+              Déclarer un versement
+            </button>
+          )
         }
       />
 
@@ -104,7 +145,9 @@ function Deposits() {
           </p>
         </StatCard>
         <StatCard label="À vérifier" value={pending.length} icon={ClipboardCheck} tone="warning">
-          <p className="text-sm text-ink-mute">{pending.length ? 'Versements d’hier soir' : 'Tout est à jour'}</p>
+          <p className="text-sm text-ink-mute">
+            {!pending.length ? 'Tout est à jour' : canReview ? 'Versements à contrôler' : 'En attente du propriétaire'}
+          </p>
         </StatCard>
       </section>
 
@@ -124,7 +167,13 @@ function Deposits() {
           />
         </div>
 
-        {visible.length === 0 ? (
+        {list.length === 0 ? (
+          <EmptyState icon={HandCoins} title="Aucun versement pour l’instant">
+            {canReview
+              ? 'Chaque soir, vos gérants déclarent ici l’argent remis. Vous comparez avec les ventes en espèces, puis vous validez ou signalez l’écart. Invitez un gérant depuis la page Équipe pour commencer.'
+              : 'Après la fermeture, touchez « Déclarer un versement » et indiquez le montant remis au propriétaire.'}
+          </EmptyState>
+        ) : visible.length === 0 ? (
           <EmptyState icon={CircleCheck} title="Rien à vérifier">
             Tous les versements ont été contrôlés. Les prochains arriveront ce soir après la fermeture.
           </EmptyState>
@@ -216,6 +265,9 @@ function Deposits() {
       </section>
 
       <ReviewDialog deposit={reviewing} canReview={canReview} onClose={() => setReviewing(null)} onDecide={decide} />
+      {canDeclare && (
+        <DeclareDialog open={declaring} shops={ownShops} onClose={() => setDeclaring(false)} onDeclared={declared} />
+      )}
       {region}
     </div>
   );
@@ -279,7 +331,10 @@ function ReviewDialog({
           <div className="overflow-hidden rounded-2xl border border-line">
             {[
               ['Ventes en espèces du jour', formatFcfa(deposit.expected)],
-              [`Remis par ${deposit.manager.split(' ')[0]} (${deposit.method})`, formatFcfa(deposit.deposited)],
+              [
+                `Remis par ${deposit.manager.split(' ')[0]} (${deposit.method}${deposit.reference ? ` · Réf. ${deposit.reference}` : ''})`,
+                formatFcfa(deposit.deposited),
+              ],
             ].map(([label, value]) => (
               <div
                 key={label}
@@ -299,10 +354,18 @@ function ReviewDialog({
             </div>
           </div>
 
+          {deposit.comment && (
+            <div className="rounded-2xl border border-line p-4 text-sm">
+              <p className="font-semibold text-ink">Explication de {deposit.manager.split(' ')[0]}</p>
+              <p className="mt-1 leading-relaxed text-ink-soft">{deposit.comment}</p>
+            </div>
+          )}
+
           {gap !== 0 && editable && (
             <p className="text-sm leading-relaxed text-ink-soft">
-              Il manque <strong className="text-ink">{formatFcfa(Math.abs(gap))}</strong>. Demandez une explication à{' '}
-              {deposit.manager.split(' ')[0]} avant de valider, ou signalez l’écart pour le garder dans son historique.
+              {gap < 0 ? 'Il manque' : 'Il y a'} <strong className="text-ink">{formatFcfa(Math.abs(gap))}</strong>
+              {gap > 0 && ' de plus que les ventes'}. Demandez une explication à {deposit.manager.split(' ')[0]} avant
+              de valider, ou signalez l’écart pour le garder dans son historique.
             </p>
           )}
 
@@ -330,6 +393,243 @@ function ReviewDialog({
           )}
         </div>
       )}
+    </Modal>
+  );
+}
+
+function dayOption(day: number) {
+  if (day === TODAY_START) return 'Aujourd’hui';
+  if (day === TODAY_START - DAY) return 'Hier';
+  return formatLongDay(day);
+}
+
+type DeclareErrors = Partial<Record<'amount' | 'reference' | 'comment', string>>;
+
+function DeclareDialog({
+  open,
+  shops,
+  onClose,
+  onDeclared,
+}: {
+  open: boolean;
+  shops: string[];
+  onClose: () => void;
+  onDeclared: (deposit: Deposit) => void;
+}) {
+  const { demo, member } = useSession();
+  const [shop, setShop] = useState(shops[0]);
+  const days = undeclaredDays(demo, shop);
+  const [pickedDay, setPickedDay] = useState<number | null>(null);
+  const day = pickedDay !== null && days.includes(pickedDay) ? pickedDay : days[0];
+  const [amount, setAmount] = useState<string | null>(null);
+  const [method, setMethod] = useState<PayId>('cash');
+  const [reference, setReference] = useState('');
+  const [comment, setComment] = useState('');
+  const [errors, setErrors] = useState<DeclareErrors>({});
+
+  const expected = day === undefined ? 0 : cashSalesTotal(demo.sales, shop, day);
+  const cashSales =
+    day === undefined
+      ? 0
+      : demo.sales.filter(
+          (sale) =>
+            sale.shop === shop && sale.pay === 'cash' && !sale.cancelled && sale.at >= day && sale.at < day + DAY,
+        ).length;
+  /* Pre-filled with the exact amount until the manager types another one. */
+  const amountValue = amount ?? String(expected);
+  const deposited = Number(amountValue) || 0;
+  const gap = deposited - expected;
+
+  const close = () => {
+    setPickedDay(null);
+    setAmount(null);
+    setMethod('cash');
+    setReference('');
+    setComment('');
+    setErrors({});
+    onClose();
+  };
+
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (day === undefined) return;
+    const found: DeclareErrors = {};
+    if (deposited <= 0 && expected > 0) found.amount = 'Indiquez le montant remis.';
+    if (method !== 'cash' && reference.trim().length < 4)
+      found.reference = 'Saisissez le numéro de la transaction pour que le propriétaire la retrouve.';
+    if (gap !== 0 && comment.trim().length < 5) found.comment = 'Expliquez l’écart en quelques mots.';
+    setErrors(found);
+    const first = (['amount', 'reference', 'comment'] as const).find((key) => found[key]);
+    if (first) return document.getElementById(`declare-${first}`)?.focus();
+    const created = declareDeposit(
+      {
+        shop,
+        day,
+        deposited,
+        method: payLabel(method),
+        reference: method === 'cash' ? '' : reference,
+        comment,
+      },
+      member.name,
+    );
+    close();
+    onDeclared(created);
+  };
+
+  const invalid = (key: keyof DeclareErrors) => ({
+    'aria-invalid': Boolean(errors[key]) || undefined,
+    'aria-describedby': errors[key] ? `declare-${key}-error` : undefined,
+  });
+
+  return (
+    <Modal
+      open={open}
+      onClose={close}
+      title="Déclarer un versement"
+      description="Le propriétaire est prévenu et vérifie le montant."
+      footer={
+        <>
+          <button type="button" className="btn-quiet h-11 px-4" onClick={close}>
+            Annuler
+          </button>
+          <button type="submit" form="declare-deposit" className="btn-gold h-11 px-5" disabled={day === undefined}>
+            Déclarer {formatFcfa(deposited)}
+          </button>
+        </>
+      }
+    >
+      <form id="declare-deposit" noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2">
+        <FormField id="declare-shop" label="Boutique">
+          {shops.length === 1 ? (
+            <input id="declare-shop" className={inputClass()} value={shop} readOnly />
+          ) : (
+            <SelectBox
+              id="declare-shop"
+              value={shop}
+              onChange={(event) => {
+                setShop(event.target.value);
+                setAmount(null);
+              }}
+            >
+              {shops.map((name) => (
+                <option key={name}>{name}</option>
+              ))}
+            </SelectBox>
+          )}
+        </FormField>
+        <FormField id="declare-day" label="Ventes du">
+          {day === undefined ? (
+            <input id="declare-day" className={inputClass()} value="Tout est déjà déclaré" readOnly />
+          ) : (
+            <SelectBox
+              id="declare-day"
+              value={day}
+              onChange={(event) => {
+                setPickedDay(Number(event.target.value));
+                setAmount(null);
+              }}
+            >
+              {days.map((item) => (
+                <option key={item} value={item}>
+                  {dayOption(item)}
+                </option>
+              ))}
+            </SelectBox>
+          )}
+        </FormField>
+
+        <div className="overflow-hidden rounded-2xl border border-line sm:col-span-2">
+          <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3 text-sm">
+            <span className="text-ink-soft">
+              Ventes en espèces{day === TODAY_START ? ' jusqu’à maintenant' : ''} ({cashSales} vente
+              {cashSales > 1 ? 's' : ''})
+            </span>
+            <span className="font-semibold text-ink tabular-nums">{formatFcfa(expected)}</span>
+          </div>
+          <div
+            aria-live="polite"
+            className={`flex items-center justify-between gap-4 px-4 py-3 ${
+              gap < 0 ? 'bg-red-50 dark:bg-red-400/10' : gap > 0 ? 'bg-gold-50 dark:bg-gold-400/10' : 'bg-sunken/60'
+            }`}
+          >
+            <span className="font-bold text-ink">Écart</span>
+            {gap === 0 ? <Badge tone="success">Conforme</Badge> : <Gap value={gap} />}
+          </div>
+        </div>
+
+        <FormField id="declare-amount" label="Montant remis (FCFA)" error={errors.amount}>
+          <input
+            id="declare-amount"
+            inputMode="numeric"
+            className={inputClass(Boolean(errors.amount))}
+            value={amountValue}
+            onChange={(event) => {
+              setAmount(event.target.value.replace(/[^\d]/g, ''));
+              setErrors({ ...errors, amount: undefined });
+            }}
+            {...invalid('amount')}
+          />
+        </FormField>
+        <FormField id="declare-method" label="Remis par">
+          <SelectBox
+            id="declare-method"
+            value={method}
+            onChange={(event) => {
+              setMethod(event.target.value as PayId);
+              setErrors({ ...errors, reference: undefined });
+            }}
+          >
+            {PAYMENTS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.short}
+              </option>
+            ))}
+          </SelectBox>
+        </FormField>
+        {method !== 'cash' && (
+          <FormField
+            id="declare-reference"
+            label="N° de transaction"
+            error={errors.reference}
+            hint="Il figure dans le SMS de confirmation."
+            className="sm:col-span-2"
+          >
+            <input
+              id="declare-reference"
+              className={inputClass(Boolean(errors.reference))}
+              placeholder={method === 'transfer' ? 'Ex. VIR-2026-10-23-0042' : 'Ex. MP261023.1845.C12345'}
+              autoComplete="off"
+              maxLength={40}
+              value={reference}
+              onChange={(event) => {
+                setReference(event.target.value);
+                setErrors({ ...errors, reference: undefined });
+              }}
+              {...invalid('reference')}
+            />
+          </FormField>
+        )}
+        <FormField
+          id="declare-comment"
+          label={gap === 0 ? 'Commentaire (facultatif)' : 'Explication de l’écart'}
+          error={errors.comment}
+          hint={gap === 0 ? undefined : 'Monnaie rendue en trop, dépense payée avec la caisse…'}
+          className="sm:col-span-2"
+        >
+          <textarea
+            id="declare-comment"
+            rows={2}
+            maxLength={200}
+            className={textareaClass}
+            value={comment}
+            onChange={(event) => {
+              setComment(event.target.value);
+              setErrors({ ...errors, comment: undefined });
+            }}
+            {...invalid('comment')}
+          />
+        </FormField>
+      </form>
     </Modal>
   );
 }

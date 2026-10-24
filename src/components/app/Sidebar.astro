@@ -1,18 +1,14 @@
 ---
-import { Logo } from '../brand/Logo';
 import SidebarBody from './SidebarBody';
 
 type Props = { current: string };
 const { current } = Astro.props;
 ---
 
-<aside class="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col overflow-y-auto bg-navy-950 px-4 pt-6 pb-6 lg:flex">
+<aside class="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col overflow-x-hidden overflow-y-auto bg-navy-950 px-4 pt-6 pb-6 transition-[width,padding] duration-200 ease-out motion-reduce:transition-none lg:flex rail:w-20 rail:px-3">
   <div
     aria-hidden="true"
     class="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(80%_60%_at_20%_0%,rgb(244_181_44/0.12),transparent)]"
   ></div>
-  <a href="/app" class="relative px-2 text-white" aria-label="GOLDSTOCK, tableau de bord">
-    <Logo />
-  </a>
   <SidebarBody client:load current={current} />
 </aside>

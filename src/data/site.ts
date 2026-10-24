@@ -7,6 +7,7 @@ export const site = {
   appUrl: '/app',
   signupUrl: '/essai-gratuit',
   loginUrl: '/connexion',
+  confirmEmailUrl: '/confirmer-email',
   trialDays: 7,
   whatsappNumber: '18733000708',
   supportPhone: '+1 (873) 300-0708',
@@ -90,7 +91,7 @@ export const features = [
 export const steps = [
   {
     title: 'Créez votre compte',
-    text: 'Inscription en 2 minutes avec votre numéro de téléphone. Aucune carte bancaire demandée.',
+    text: 'Inscription en 2 minutes : votre activité et votre email suffisent. Aucune carte bancaire demandée.',
   },
   {
     title: 'Ajoutez vos produits',
@@ -170,7 +171,7 @@ export const plans: Plan[] = [
     id: 'demarrage',
     name: 'Démarrage',
     tagline: 'Pour une boutique qui se lance.',
-    monthlyPrice: 5000,
+    monthlyPrice: 10000,
     features: [
       '1 boutique',
       '2 utilisateurs',
@@ -183,7 +184,7 @@ export const plans: Plan[] = [
     id: 'business',
     name: 'Business',
     tagline: 'Pour les commerces en croissance.',
-    monthlyPrice: 12000,
+    monthlyPrice: 15000,
     highlighted: true,
     features: [
       "Jusqu'à 3 boutiques",
@@ -224,7 +225,11 @@ export const faqs = [
   },
   {
     q: 'Puis-je gérer plusieurs boutiques\u00a0?',
-    a: 'Oui. Selon votre formule, vous suivez plusieurs boutiques depuis un seul compte, avec des stocks, des vendeurs et des versements séparés.',
+    a: 'Oui. Selon votre formule, vous suivez plusieurs boutiques depuis un seul compte, avec des stocks, des vendeurs et des versements séparés. Elles exercent toutes l’activité choisie à l’inscription.',
+  },
+  {
+    q: 'Puis-je vendre des téléphones et des vêtements dans le même compte\u00a0?',
+    a: 'Non. Chaque compte exerce une seule activité (téléphonie, coiffure, vêtements, chaussures…), choisie à l’inscription, pour que vos catégories, vos fournisseurs et vos rapports restent clairs. Pour une autre activité, créez un compte séparé.',
   },
   {
     q: 'Mes données sont-elles en sécurité\u00a0?',

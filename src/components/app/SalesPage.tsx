@@ -1,9 +1,8 @@
-import { Ban, Plus, Receipt as ReceiptIcon, SearchX, Undo2 } from 'lucide-react';
+import { Ban, FileText, Plus, Receipt as ReceiptIcon, SearchX, Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   DAY,
   PAYMENTS,
-  SHOPS,
   TODAY_START,
   formatFcfa,
   formatFullDate,
@@ -20,6 +19,7 @@ import {
   type SaleState,
 } from '../../data/dashboard';
 import { returnItems, setSaleCancelled, summarize, useSession, visibleSales } from '../../lib/demo';
+import { InvoiceDialog } from './Invoice';
 import { Receipt } from './PosPage';
 import { Screen } from './Screen';
 import { normalize } from './Topbar';
@@ -175,15 +175,24 @@ function Sales() {
                 className="xl:w-52"
               >
                 <option value="all">Toutes les boutiques</option>
-                {SHOPS.map((name) => (
-                  <option key={name}>{name}</option>
+                {demo.shops.map((item) => (
+                  <option key={item.name}>{item.name}</option>
                 ))}
               </SelectBox>
             )}
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {visibleSales(session).length === 0 ? (
+          <EmptyState icon={ReceiptIcon} title="Pas encore de vente">
+            <p>Chaque vente encaissée en caisse s’affiche ici, avec son reçu, sa facture et ses retours éventuels.</p>
+            {can('pos') && (
+              <a href="/app/caisse" className="btn-gold mt-5 h-11 px-4">
+                Ouvrir la caisse
+              </a>
+            )}
+          </EmptyState>
+        ) : filtered.length === 0 ? (
           <EmptyState icon={SearchX} title="Aucune vente ne correspond">
             Élargissez la période ou retirez un filtre.
           </EmptyState>
@@ -342,14 +351,17 @@ function SaleDetail({
 }) {
   const [mode, setMode] = useState<'view' | 'return' | 'cancel' | 'receipt'>('view');
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [invoicing, setInvoicing] = useState(false);
 
   useEffect(() => {
     setMode('view');
     setQuantities({});
+    setInvoicing(false);
   }, [sale?.id]);
 
   if (!sale) return null;
   const state = saleState(sale);
+  const invoiceable = state === 'ok' || state === 'partial';
   const returnable = sale.lines.some((line) => line.qty > line.returned);
   const toReturn = Object.values(quantities).reduce((sum, value) => sum + value, 0);
   const gross = saleGross(sale);
@@ -403,6 +415,12 @@ function SaleDetail({
           <ReceiptIcon className="size-[1.125rem]" aria-hidden="true" />
           {mode === 'receipt' ? 'Détail' : 'Reçu'}
         </button>
+        {invoiceable && (
+          <button type="button" className="btn-quiet h-11 px-4" onClick={() => setInvoicing(true)}>
+            <FileText className="size-[1.125rem]" aria-hidden="true" />
+            Facture
+          </button>
+        )}
         {canEdit && state !== 'cancelled' && (
           <>
             {returnable && (
@@ -425,102 +443,112 @@ function SaleDetail({
     );
 
   return (
-    <Modal
-      open
-      variant="sheet"
-      onClose={onClose}
-      title={`Vente ${sale.id}`}
-      description={`${formatFullDate(sale.at)} à ${formatTime(sale.at)}`}
-      footer={footer}
-    >
-      {mode === 'receipt' ? (
-        <Receipt sale={sale} />
-      ) : (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between gap-3">
-            <StatusBadge kind="sale" status={state} />
-            <p className="text-2xl font-extrabold tracking-tight text-ink tabular-nums">{formatFcfa(saleNet(sale))}</p>
-          </div>
+    <>
+      <Modal
+        open
+        variant="sheet"
+        onClose={onClose}
+        title={`Vente ${sale.id}`}
+        description={`${formatFullDate(sale.at)} à ${formatTime(sale.at)}`}
+        footer={footer}
+      >
+        {mode === 'receipt' && !invoicing ? (
+          <Receipt sale={sale} />
+        ) : (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between gap-3">
+              <StatusBadge kind="sale" status={state} />
+              <p className="text-2xl font-extrabold tracking-tight text-ink tabular-nums">
+                {formatFcfa(saleNet(sale))}
+              </p>
+            </div>
 
-          {mode === 'cancel' && (
-            <p className="rounded-2xl bg-red-50 p-4 text-sm leading-relaxed text-red-800 dark:bg-red-400/10 dark:text-red-200">
-              La vente ne comptera plus dans le chiffre d’affaires et les {saleItems(sale)} article(s) reviendront en
-              stock. Vous pourrez la rétablir juste après.
-            </p>
-          )}
+            {mode === 'cancel' && (
+              <p className="rounded-2xl bg-red-50 p-4 text-sm leading-relaxed text-red-800 dark:bg-red-400/10 dark:text-red-200">
+                La vente ne comptera plus dans le chiffre d’affaires et les {saleItems(sale)} article(s) reviendront en
+                stock. Vous pourrez la rétablir juste après.
+              </p>
+            )}
 
-          <dl className="grid grid-cols-2 gap-4 rounded-2xl bg-sunken p-4 text-sm">
-            {[
-              ['Boutique', sale.shop],
-              ['Vendeur', sale.seller],
-              ['Client', sale.customer || 'Client de passage'],
-              ['Paiement', `${payLabel(sale.pay)}${sale.reference ? ` · ${sale.reference}` : ''}`],
-            ].map(([label, value]) => (
-              <div key={label} className="min-w-0">
-                <dt className="text-ink-mute">{label}</dt>
-                <dd className="mt-0.5 truncate font-semibold text-ink">{value}</dd>
-              </div>
-            ))}
-          </dl>
-
-          <div>
-            <h3 className="text-sm font-bold text-ink">{mode === 'return' ? 'Articles à retourner' : 'Articles'}</h3>
-            <ul className="mt-2 divide-y divide-line">
-              {sale.lines.map((line) => {
-                const left = line.qty - line.returned;
-                return (
-                  <li key={line.vid} className="flex items-center gap-3 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-ink">{line.name}</p>
-                      <p className="truncate text-sm text-ink-mute">
-                        {line.label ? `${line.label} · ` : ''}
-                        {line.qty} × {formatFcfa(line.price)}
-                        {line.returned > 0 && ` · ${line.returned} retourné${line.returned > 1 ? 's' : ''}`}
-                      </p>
-                    </div>
-                    {mode === 'return' ? (
-                      <Stepper
-                        size="sm"
-                        label={`Quantité retournée de ${line.name}`}
-                        value={quantities[line.vid] ?? 0}
-                        max={left}
-                        onChange={(value) => setQuantities((current) => ({ ...current, [line.vid]: value }))}
-                      />
-                    ) : (
-                      <span className="font-semibold text-ink tabular-nums">{formatFcfa(line.price * line.qty)}</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          {mode !== 'return' && (
-            <dl className="space-y-1.5 border-t border-line pt-4 text-sm">
-              <div className="flex justify-between text-ink-soft">
-                <dt>Sous-total</dt>
-                <dd className="tabular-nums">{formatFcfa(gross)}</dd>
-              </div>
-              {sale.discount > 0 && (
-                <div className="flex justify-between text-ink-soft">
-                  <dt>Remise</dt>
-                  <dd className="tabular-nums">− {formatFcfa(sale.discount)}</dd>
+            <dl className="grid grid-cols-2 gap-4 rounded-2xl bg-sunken p-4 text-sm">
+              {[
+                ['Boutique', sale.shop],
+                ['Vendeur', sale.seller],
+                ['Client', sale.customer || 'Client de passage'],
+                ['Paiement', `${payLabel(sale.pay)}${sale.reference ? ` · ${sale.reference}` : ''}`],
+              ].map(([label, value]) => (
+                <div key={label} className="min-w-0">
+                  <dt className="text-ink-mute">{label}</dt>
+                  <dd className="mt-0.5 truncate font-semibold text-ink">{value}</dd>
                 </div>
-              )}
-              {sale.lines.some((line) => line.returned) && (
-                <div className="flex justify-between text-ink-soft">
-                  <dt>Remboursé</dt>
-                  <dd className="tabular-nums">− {formatFcfa(gross - sale.discount - saleNet(sale))}</dd>
-                </div>
-              )}
-              <div className="flex justify-between pt-1 font-bold text-ink">
-                <dt>Total encaissé</dt>
-                <dd className="tabular-nums">{formatFcfa(saleNet(sale))}</dd>
-              </div>
+              ))}
             </dl>
-          )}
-        </div>
-      )}
-    </Modal>
+
+            <div>
+              <h3 className="text-sm font-bold text-ink">{mode === 'return' ? 'Articles à retourner' : 'Articles'}</h3>
+              <ul className="mt-2 divide-y divide-line">
+                {sale.lines.map((line) => {
+                  const left = line.qty - line.returned;
+                  return (
+                    <li key={line.vid} className="flex items-center gap-3 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold text-ink">{line.name}</p>
+                        <p className="truncate text-sm text-ink-mute">
+                          {line.label ? `${line.label} · ` : ''}
+                          {line.qty} × {formatFcfa(line.price)}
+                          {line.returned > 0 && ` · ${line.returned} retourné${line.returned > 1 ? 's' : ''}`}
+                        </p>
+                        {line.listPrice !== undefined && (
+                          <p className="truncate text-xs text-gold-700 dark:text-gold-300">
+                            Prix changé à la vente · catalogue {formatFcfa(line.listPrice)}
+                          </p>
+                        )}
+                      </div>
+                      {mode === 'return' ? (
+                        <Stepper
+                          size="sm"
+                          label={`Quantité retournée de ${line.name}`}
+                          value={quantities[line.vid] ?? 0}
+                          max={left}
+                          onChange={(value) => setQuantities((current) => ({ ...current, [line.vid]: value }))}
+                        />
+                      ) : (
+                        <span className="font-semibold text-ink tabular-nums">{formatFcfa(line.price * line.qty)}</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            {mode !== 'return' && (
+              <dl className="space-y-1.5 border-t border-line pt-4 text-sm">
+                <div className="flex justify-between text-ink-soft">
+                  <dt>Sous-total</dt>
+                  <dd className="tabular-nums">{formatFcfa(gross)}</dd>
+                </div>
+                {sale.discount > 0 && (
+                  <div className="flex justify-between text-ink-soft">
+                    <dt>Remise</dt>
+                    <dd className="tabular-nums">− {formatFcfa(sale.discount)}</dd>
+                  </div>
+                )}
+                {sale.lines.some((line) => line.returned) && (
+                  <div className="flex justify-between text-ink-soft">
+                    <dt>Remboursé</dt>
+                    <dd className="tabular-nums">− {formatFcfa(gross - sale.discount - saleNet(sale))}</dd>
+                  </div>
+                )}
+                <div className="flex justify-between pt-1 font-bold text-ink">
+                  <dt>Total encaissé</dt>
+                  <dd className="tabular-nums">{formatFcfa(saleNet(sale))}</dd>
+                </div>
+              </dl>
+            )}
+          </div>
+        )}
+      </Modal>
+      {invoicing && <InvoiceDialog sale={sale} onClose={() => setInvoicing(false)} />}
+    </>
   );
 }

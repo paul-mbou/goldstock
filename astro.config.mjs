@@ -11,8 +11,9 @@ export default defineConfig({
 
   env: {
     schema: {
-      // Base URL of the GOLDSTOCK API (login and signup). Leave empty until the backend is live.
-      PUBLIC_API_URL: envField.string({ context: 'client', access: 'public', optional: true, url: true }),
+      // Supabase project used for login and signup. While either is unset, the forms open the demo.
+      PUBLIC_SUPABASE_URL: envField.string({ context: 'client', access: 'public', optional: true, url: true }),
+      PUBLIC_SUPABASE_PUBLISHABLE_KEY: envField.string({ context: 'client', access: 'public', optional: true }),
     },
   },
 

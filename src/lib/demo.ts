@@ -1,48 +1,75 @@
 import { useSyncExternalStore } from 'react';
+import { DEFAULT_BUSINESS, businessOf, type BusinessId } from '../data/businesses';
+import { CATEGORIES } from '../data/catalogs';
 import {
   DAY,
   DEMO_VERSION,
   HOUR,
   NOW,
+  PLAN_LIMITS,
   ROLES,
   TODAY_START,
+  cashSalesTotal,
   createSeed,
   formatDayOfMonth,
+  formatFcfa,
   formatLongDay,
   formatWeekday,
+  invoiceDate,
   saleCost,
   saleNet,
   type Activity,
   type ActivityIcon,
   type Category,
   type DemoState,
+  type Deposit,
+  type Expense,
+  type Member,
   type MoveType,
   type NotificationKind,
   type PayId,
-  type RoleId,
   type Product,
+  type RoleId,
   type Sale,
   type SaleLine,
   type ScreenId,
   type Shop,
+  type ShopIdentity,
   type Variant,
 } from '../data/dashboard';
+import { takeDemoSetup } from './demo-setup';
 
 /*
  * One shared store for every island of the merchant space. It starts from the seed (so the
  * server render matches) and is kept in sessionStorage, so a sale rung up at the till shows
- * up in the sales list and the stock on the next page.
+ * up in the sales list and the stock on the next page. Signup replaces it with an empty shop
+ * holding the categories of the line of business the owner picked.
  */
 
 const STORAGE_KEY = 'gs-demo';
-const seed = createSeed();
+const seedFor = (business: BusinessId, identity?: ShopIdentity) => createSeed(business, CATEGORIES[business], identity);
+const seed = seedFor(DEFAULT_BUSINESS);
 let state = seed;
 let loaded = false;
 const listeners = new Set<() => void>();
 
+function save() {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* Private mode: the demo still works for this page. */
+  }
+}
+
 function load() {
   if (loaded || typeof window === 'undefined') return;
   loaded = true;
+  const setup = takeDemoSetup();
+  if (setup) {
+    state = seedFor(setup.business, setup);
+    save();
+    return;
+  }
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     const saved = raw ? (JSON.parse(raw) as DemoState) : null;
@@ -68,28 +95,54 @@ export const useDemo = () => useSyncExternalStore(subscribe, getSnapshot, getSer
 export function setDemo(update: (current: DemoState) => DemoState) {
   load();
   state = update(state);
-  try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* Private mode: the demo still works for this page. */
-  }
+  save();
   listeners.forEach((listener) => listener());
 }
 
+/** Empties the shop again, keeping its line of business, its identity and its owner. */
 export function resetDemo() {
-  state = seed;
-  sessionStorage.removeItem(STORAGE_KEY);
-  listeners.forEach((listener) => listener());
+  setDemo(({ business, settings, team }) => {
+    const owner = team.find((member) => member.role === 'owner');
+    return seedFor(business, {
+      shopName: settings.shopName,
+      city: settings.city,
+      logoUrl: settings.logoUrl,
+      ownerName: owner?.name,
+      phone: owner?.phone,
+    });
+  });
 }
 
 /* ------------------------------------------------------------------ session */
 
+/**
+ * Who the screens act as. The owner is the account holder; the staff roles are previews of
+ * what an employee sees, played by the first team member with that role, or by a stand-in
+ * until the owner invites one.
+ */
+function memberFor(demo: DemoState, roleId: RoleId): Member {
+  const match =
+    demo.team.find((item) => item.role === roleId && item.status === 'active') ??
+    demo.team.find((item) => item.role === roleId && item.status !== 'suspended');
+  if (match) return match;
+  return {
+    id: `apercu-${roleId}`,
+    name: ROLES[roleId].label,
+    role: roleId,
+    phone: '',
+    shop: roleId === 'owner' || roleId === 'stock' ? 'Toutes' : (demo.shops[0]?.name ?? 'Toutes'),
+    status: 'active',
+    lastSeen: null,
+  };
+}
+
 export function useSession() {
   const demo = useDemo();
   const role = ROLES[demo.role];
-  const member = demo.team.find((item) => item.id === role.memberId)!;
+  const member = memberFor(demo, demo.role);
   return {
     demo,
+    business: businessOf(demo.business),
     roleId: demo.role,
     role,
     member,
@@ -110,7 +163,11 @@ const notificationKinds: Record<RoleId, NotificationKind[]> = {
 };
 
 export const visibleNotifications = ({ demo, roleId }: Session) =>
-  demo.notifications.filter((notification) => notificationKinds[roleId].includes(notification.kind));
+  demo.notifications.filter(
+    (notification) =>
+      notificationKinds[roleId].includes(notification.kind) &&
+      (!notification.roles || notification.roles.includes(roleId)),
+  );
 
 export function setRole(role: RoleId) {
   setDemo((demo) => ({ ...demo, role }));
@@ -283,7 +340,8 @@ export type SaleInput = {
   shop: Shop;
   seller: string;
   customer: string;
-  lines: { vid: string; qty: number }[];
+  /** `price`: unit price agreed with this customer; the product's catalogue price is left untouched. */
+  lines: { vid: string; qty: number; price?: number }[];
   discount: number;
   pay: PayId;
   received: number;
@@ -294,8 +352,9 @@ export function recordSale(input: SaleInput): Sale {
   let created: Sale | null = null;
   setDemo((demo) => {
     const items = flatItems(demo, { activeOnly: false });
-    const lines: SaleLine[] = input.lines.map(({ vid, qty }) => {
+    const lines: SaleLine[] = input.lines.map(({ vid, qty, price }) => {
       const { product, variant } = items.find((item) => item.variant.id === vid)!;
+      const changed = price !== undefined && price !== variant.price;
       return {
         pid: product.id,
         vid,
@@ -303,7 +362,8 @@ export function recordSale(input: SaleInput): Sale {
         label: variant.label,
         cat: product.cat,
         qty,
-        price: variant.price,
+        price: changed ? price : variant.price,
+        ...(changed && { listPrice: variant.price }),
         cost: variant.cost,
         returned: 0,
       };
@@ -317,6 +377,9 @@ export function recordSale(input: SaleInput): Sale {
       shop: input.shop,
       seller: input.seller,
       customer: input.customer.trim(),
+      customerPhone: '',
+      customerEmail: '',
+      invoicedAt: null,
       lines,
       discount: input.discount,
       pay: input.pay,
@@ -376,6 +439,7 @@ export function returnItems(id: string, quantities: Record<string, number>, user
           qty: quantities[line.vid],
           user,
           note: `Retour client ${id}`,
+          source: sale.customer || 'Client',
         })),
         ...demo.moves,
       ],
@@ -388,14 +452,66 @@ export function adjustStock(vid: string, delta: number, type: MoveType, note: st
   setDemo((demo) => {
     const item = flatItems(demo, { activeOnly: false }).find((entry) => entry.variant.id === vid)!;
     const at = nextTime(demo);
+    const party =
+      type === 'return' ? { source: 'Client' } : type === 'loss' ? { destination: 'Casse ou perte' } : undefined;
     return {
       ...demo,
       products: shiftStock(demo.products, { [vid]: delta }),
-      moves: [{ id: `m${at}`, at, type, item: item.full, qty: delta, user, note }, ...demo.moves],
+      moves: [{ id: `m${at}`, at, type, item: item.full, qty: delta, user, note, ...party }, ...demo.moves],
       activity: withActivity(
         demo,
         user,
         `a ${delta > 0 ? 'ajouté' : 'retiré'} ${Math.abs(delta)} × ${item.product.name}`,
+        'stock',
+      ),
+    };
+  });
+}
+
+export type MoveInput = {
+  vid: string;
+  direction: 'in' | 'out';
+  qty: number;
+  type: MoveType;
+  /** Provenance of an entry, or destination / reason of an exit. */
+  party: string;
+  /** Day picked by the user; `null` means right now. */
+  at: number | null;
+  user: string;
+  note: string;
+};
+
+/** A manual entry or exit; back-dated moves are filed at their date in the history. */
+export function recordMove(input: MoveInput) {
+  setDemo((demo) => {
+    const item = flatItems(demo, { activeOnly: false }).find((entry) => entry.variant.id === input.vid)!;
+    const now = nextTime(demo);
+    const at = input.at ?? now;
+    const entry = input.direction === 'in';
+    const qty = entry ? input.qty : -Math.min(input.qty, item.variant.stock);
+    const move = {
+      id: `m${now}`,
+      at,
+      type: input.type,
+      item: item.full,
+      qty,
+      user: input.user,
+      note: input.note.trim(),
+      ...(entry ? { source: input.party } : { destination: input.party }),
+    };
+    const index = demo.moves.findIndex((other) => other.at <= at);
+    const moves = [...demo.moves];
+    moves.splice(index === -1 ? moves.length : index, 0, move);
+    return {
+      ...demo,
+      products: shiftStock(demo.products, { [input.vid]: qty }),
+      moves,
+      activity: withActivity(
+        demo,
+        input.user,
+        entry
+          ? `a enregistré l’entrée de ${input.qty} × ${item.product.name} (provenance : ${input.party})`
+          : `a enregistré la sortie de ${Math.abs(qty)} × ${item.product.name} (${input.party})`,
         'stock',
       ),
     };
@@ -485,6 +601,7 @@ export function receiveGoods(
           qty: line.qty,
           user,
           note: `Réception ${receptionId}`,
+          source: supplier.name,
         })),
         ...demo.moves,
       ],
@@ -496,4 +613,177 @@ export function receiveGoods(
 
 export function logActivity(user: string, text: string, icon: ActivityIcon) {
   setDemo((demo) => ({ ...demo, activity: withActivity(demo, user, text, icon) }));
+}
+
+export type InvoiceCustomer = Pick<Sale, 'customer' | 'customerPhone' | 'customerEmail'>;
+
+/** Saves who the invoice is for and fixes its date the first time it is printed or sent. */
+export function issueInvoice(id: string, customer: InvoiceCustomer) {
+  setDemo((demo) => ({
+    ...demo,
+    sales: demo.sales.map((sale) =>
+      sale.id === id
+        ? { ...sale, ...customer, customer: customer.customer.trim(), invoicedAt: invoiceDate(sale) }
+        : sale,
+    ),
+  }));
+}
+
+/* ------------------------------------------------------------------ deposits */
+
+/** Days a manager can still declare for: the last two weeks, today included, without a deposit yet. */
+export function undeclaredDays(demo: DemoState, shop: Shop) {
+  return Array.from({ length: 14 }, (_, index) => TODAY_START - index * DAY).filter(
+    (day) => !demo.deposits.some((deposit) => deposit.shop === shop && deposit.day === day),
+  );
+}
+
+export type DepositInput = Pick<Deposit, 'shop' | 'day' | 'deposited' | 'method' | 'reference' | 'comment'>;
+
+/** A manager hands the day's cash to the owner: it waits as "à vérifier" and the owner is notified. */
+export function declareDeposit(input: DepositInput, manager: string): Deposit {
+  let created: Deposit | null = null;
+  setDemo((demo) => {
+    const at = nextTime(demo);
+    const expected = cashSalesTotal(demo.sales, input.shop, input.day);
+    const deposit: Deposit = {
+      ...input,
+      reference: input.reference.trim(),
+      comment: input.comment.trim(),
+      id: `D-${Math.round((TODAY_START - input.day) / DAY)}-${input.shop}`,
+      manager,
+      expected,
+      depositedAt: at,
+      status: 'pending',
+      note: '',
+    };
+    created = deposit;
+    const gap = input.deposited - expected;
+    return {
+      ...demo,
+      deposits: [deposit, ...demo.deposits].sort((a, b) => b.day - a.day || b.depositedAt - a.depositedAt),
+      notifications: [
+        {
+          id: `n-${deposit.id}`,
+          kind: 'deposit',
+          title: `Versement à vérifier : ${input.shop}`,
+          body: `${manager} a remis ${formatFcfa(input.deposited)} (${input.method}) pour le ${formatLongDay(input.day).toLowerCase()}${
+            gap < 0 ? `. Il manque ${formatFcfa(-gap)}.` : gap > 0 ? `, ${formatFcfa(gap)} de plus que prévu.` : '.'
+          }`,
+          at,
+          read: false,
+          href: '/app/versements',
+          roles: ['owner'],
+        },
+        ...demo.notifications,
+      ],
+      activity: withActivity(
+        demo,
+        manager,
+        `a déclaré un versement de ${formatFcfa(input.deposited)} pour ${input.shop}`,
+        'deposit',
+      ),
+    };
+  });
+  return created!;
+}
+
+/** Undo of a declaration that is still waiting for the owner. */
+export function withdrawDeposit(id: string) {
+  setDemo((demo) => ({
+    ...demo,
+    deposits: demo.deposits.filter((deposit) => deposit.id !== id || deposit.status !== 'pending'),
+    notifications: demo.notifications.filter((notification) => notification.id !== `n-${id}`),
+  }));
+}
+
+/* ------------------------------------------------------------------ shops */
+
+export const shopAddress = (demo: DemoState, shop: Shop) =>
+  demo.shops.find((item) => item.name === shop)?.address ?? '';
+
+/** How many shops the current plan allows (`null`: unlimited), and whether one more fits. */
+export function shopQuota(demo: DemoState) {
+  const limit = PLAN_LIMITS[demo.plan.id].shops;
+  return { used: demo.shops.length, limit, canAdd: limit === null || demo.shops.length < limit };
+}
+
+export function addShop(name: string, address: string, user: string) {
+  setDemo((demo) => {
+    if (!shopQuota(demo).canAdd) return demo;
+    return {
+      ...demo,
+      shops: [...demo.shops, { name: name.trim(), address: address.trim() }],
+      activity: withActivity(demo, user, `a ouvert la boutique ${name.trim()}`, 'edit'),
+    };
+  });
+}
+
+export function setShopAddresses(addresses: Record<Shop, string>) {
+  setDemo((demo) => ({
+    ...demo,
+    shops: demo.shops.map((shop) => ({ ...shop, address: addresses[shop.name] ?? shop.address })),
+  }));
+}
+
+/* ------------------------------------------------------------------ expenses */
+
+/** The owner sees every shop; a manager tied to one shop only sees its expenses. */
+export const visibleExpenses = ({ demo, roleId, member }: Session) =>
+  roleId === 'owner' || member.shop === 'Toutes'
+    ? demo.expenses
+    : demo.expenses.filter((expense) => expense.shop === member.shop);
+
+export type ExpenseInput = Omit<Expense, 'id' | 'recordedBy' | 'recordedAt'>;
+
+export function recordExpense(input: ExpenseInput, user: string): Expense {
+  let created: Expense | null = null;
+  setDemo((demo) => {
+    created = {
+      ...input,
+      reason: input.reason.trim(),
+      note: input.note.trim(),
+      id: nextId(
+        demo.expenses.map((expense) => expense.id),
+        'E-',
+        4,
+      ),
+      recordedBy: user,
+      recordedAt: nextTime(demo),
+    };
+    return {
+      ...demo,
+      expenses: [created, ...demo.expenses].sort((a, b) => b.day - a.day || b.recordedAt - a.recordedAt),
+      activity: withActivity(
+        demo,
+        user,
+        `a enregistré une dépense de ${formatFcfa(input.amount)} (${created.reason})`,
+        'expense',
+      ),
+    };
+  });
+  return created!;
+}
+
+export function deleteExpense(id: string, user: string) {
+  setDemo((demo) => {
+    const expense = demo.expenses.find((item) => item.id === id);
+    if (!expense) return demo;
+    return {
+      ...demo,
+      expenses: demo.expenses.filter((item) => item.id !== id),
+      activity: withActivity(demo, user, `a supprimé la dépense « ${expense.reason} »`, 'expense'),
+    };
+  });
+}
+
+export function restoreExpense(expense: Expense) {
+  setDemo((demo) =>
+    demo.expenses.some((item) => item.id === expense.id)
+      ? demo
+      : {
+          ...demo,
+          expenses: [...demo.expenses, expense].sort((a, b) => b.day - a.day || b.recordedAt - a.recordedAt),
+        },
+  );
 }

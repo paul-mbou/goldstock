@@ -1,6 +1,7 @@
 import {
   Bell,
   ChevronDown,
+  Compass,
   ExternalLink,
   LogOut,
   Menu,
@@ -27,6 +28,8 @@ import {
   type RoleId,
   type ScreenId,
 } from '../../data/dashboard';
+import { site } from '../../data/site';
+import { signOut } from '../../lib/auth';
 import {
   markNotificationsRead,
   resetDemo,
@@ -36,6 +39,7 @@ import {
   visibleSales,
 } from '../../lib/demo';
 import { applyTheme } from '../../lib/theme';
+import { startTour } from '../../lib/tour';
 import { LogoMark } from '../brand/Logo';
 import { AppNav, isCurrent, screenIcons } from './AppNav';
 import { notificationStyle } from './NotificationItem';
@@ -174,7 +178,7 @@ function GlobalSearch() {
   const showList = open && query.trim().length >= 2;
 
   return (
-    <div ref={wrapper} className="relative hidden w-full max-w-md md:block">
+    <div ref={wrapper} data-tour="search" className="relative hidden w-full max-w-md md:block">
       <Search
         className="pointer-events-none absolute top-1/2 left-3.5 size-[1.125rem] -translate-y-1/2 text-ink-mute"
         aria-hidden="true"
@@ -294,7 +298,7 @@ function Notifications() {
   const unread = list.filter((item) => !item.read);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} data-tour="notifications" className="relative">
       <button
         type="button"
         className={iconButton}
@@ -385,7 +389,7 @@ function UserMenu({ current }: { current: string }) {
   };
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} data-tour="account" className="relative">
       <button
         type="button"
         aria-expanded={open}
@@ -416,7 +420,7 @@ function UserMenu({ current }: { current: string }) {
           <div className="border-b border-line px-1 pt-3 pb-3">
             <p className="flex items-center gap-2 px-2 text-[0.6875rem] font-bold tracking-[0.12em] text-ink-mute uppercase">
               <UserCog className="size-3.5" aria-hidden="true" />
-              Voir la démo en tant que
+              Voir l’espace en tant que
             </p>
             <div className="mt-2 grid grid-cols-2 gap-1.5">
               {ROLE_IDS.map((role) => (
@@ -438,6 +442,17 @@ function UserMenu({ current }: { current: string }) {
               <User className="size-4" aria-hidden="true" />
               Mon profil
             </a>
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                setOpen(false);
+                startTour();
+              }}
+            >
+              <Compass className="size-4" aria-hidden="true" />
+              Revoir la visite guidée
+            </button>
             <a href="/" className={item}>
               <ExternalLink className="size-4" aria-hidden="true" />
               Voir le site GOLDSTOCK
@@ -446,17 +461,28 @@ function UserMenu({ current }: { current: string }) {
               type="button"
               className={item}
               onClick={() => {
+                if (
+                  !window.confirm('Effacer les produits, ventes, mouvements et membres saisis, et repartir de zéro ?')
+                )
+                  return;
                 resetDemo();
                 window.location.reload();
               }}
             >
               <RotateCcw className="size-4" aria-hidden="true" />
-              Réinitialiser la démo
+              Repartir de zéro
             </button>
-            <a href="/connexion" className={`${item} text-red-600 hover:text-red-700 dark:text-red-400`}>
+            <button
+              type="button"
+              className={`${item} text-red-600 hover:text-red-700 dark:text-red-400`}
+              onClick={async () => {
+                await signOut();
+                window.location.assign(site.loginUrl);
+              }}
+            >
               <LogOut className="size-4" aria-hidden="true" />
               Se déconnecter
-            </a>
+            </button>
           </div>
         </div>
       )}
@@ -539,6 +565,7 @@ function BottomNav({ current, onMore }: { current: string; onMore: () => void })
             <li key={id}>
               <a
                 href={hrefOf(id)}
+                data-tour={`nav-${id}`}
                 aria-current={active ? 'page' : undefined}
                 className={`flex h-16 flex-col items-center justify-center gap-1 text-[0.6875rem] font-semibold transition ${
                   active ? 'text-gold-700 dark:text-gold-300' : 'text-ink-mute hover:text-ink'

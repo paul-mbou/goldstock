@@ -1,0 +1,6 @@
+project_id = "gold_stock"
+
+# The function checks the user's access token itself (getClaims), which also works with
+# the new publishable keys that are not JWTs.
+[functions.email-otp]
+verify_jwt = false

@@ -1,5 +1,5 @@
 import { ChevronDown, CircleAlert, Eye, EyeOff } from 'lucide-react';
-import { useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { useState, type InputHTMLAttributes, type ReactNode, type Ref, type SelectHTMLAttributes } from 'react';
 
 type FieldProps = {
   id: string;
@@ -48,6 +48,7 @@ export const controlClass = (invalid: boolean) =>
   }`;
 
 type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'children'> & {
+  ref?: Ref<HTMLInputElement>;
   id: string;
   label: string;
   error?: string;

@@ -71,7 +71,22 @@ function Suppliers() {
         ]}
       />
 
-      {view === 'list' && (
+      {view === 'list' && demo.suppliers.length === 0 && (
+        <div className="app-card">
+          <EmptyState icon={Truck} title="Aucun fournisseur">
+            <p>
+              Ajoutez les grossistes et importateurs chez qui vous achetez. Vous pourrez ensuite saisir chaque livraison
+              : le stock et le prix d’achat se mettent à jour tout seuls.
+            </p>
+            <button type="button" className="btn-gold mt-5 h-11 px-4" onClick={() => setCreating(true)}>
+              <Plus className="size-[1.125rem]" aria-hidden="true" />
+              Ajouter un fournisseur
+            </button>
+          </EmptyState>
+        </div>
+      )}
+
+      {view === 'list' && demo.suppliers.length > 0 && (
         <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {demo.suppliers.map((supplier) => {
             const last = demo.receptions.find((reception) => reception.supplier === supplier.name);

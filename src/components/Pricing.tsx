@@ -88,10 +88,7 @@ export default function Pricing({ plans, signupUrl }: PricingProps) {
                 ))}
               </ul>
 
-              <a
-                href={`${signupUrl}?formule=${plan.id}&facturation=${billing}`}
-                className={`mt-8 ${dark ? 'btn-gold' : 'btn-navy'}`}
-              >
+              <a href={signupUrl} className={`mt-8 ${dark ? 'btn-gold' : 'btn-navy'}`}>
                 Commencer l’essai gratuit
               </a>
             </li>

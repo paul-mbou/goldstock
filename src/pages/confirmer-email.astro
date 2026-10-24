@@ -1,0 +1,20 @@
+---
+import EmailConfirmation from '../components/auth/EmailConfirmation';
+import { site } from '../data/site';
+import AuthLayout from '../layouts/AuthLayout.astro';
+---
+
+<AuthLayout
+  title={`Confirmation de l’adresse email — ${site.name}`}
+  description="Confirmez votre adresse email pour activer votre compte GOLDSTOCK."
+  noindex
+  asideTitle="Votre boutique est presque prête."
+  asideText="Une adresse confirmée protège votre compte et vous permet de récupérer l’accès à tout moment."
+  points={[
+    'Toutes les fonctionnalités incluses',
+    'Aucune carte bancaire demandée',
+    'Accompagnement sur WhatsApp, 7j/7',
+  ]}
+>
+  <EmailConfirmation client:load />
+</AuthLayout>

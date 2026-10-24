@@ -1,4 +1,5 @@
 import {
+  BanknoteArrowDown,
   Boxes,
   Check,
   HandCoins,
@@ -19,7 +20,6 @@ import {
   PLAN_LIMITS,
   ROLES,
   ROLE_IDS,
-  SHOPS,
   TODAY_START,
   formatAgo,
   permissionMatrix,
@@ -66,6 +66,7 @@ const activityIcons: Record<ActivityIcon, LucideIcon> = {
   team: Users,
   deposit: HandCoins,
   cash: Wallet,
+  expense: BanknoteArrowDown,
 };
 
 const updateMember = (id: string, patch: Partial<Member>) =>
@@ -121,7 +122,8 @@ function Team() {
         <section aria-label="Membres" className="app-card overflow-hidden">
           <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <p className="text-sm text-ink-mute">
-              <span className="font-bold text-ink">{demo.team.length} membres</span> dans {SHOPS.length} boutiques
+              <span className="font-bold text-ink">{demo.team.length} membres</span> dans {demo.shops.length} boutique
+              {demo.shops.length > 1 ? 's' : ''}
             </p>
             <SearchInput
               label="Rechercher un membre"
@@ -393,10 +395,11 @@ function InviteDialog({
   onClose: () => void;
   onInvite: (member: Member) => void;
 }) {
+  const { demo } = useSession();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<RoleId>('seller');
-  const [shop, setShop] = useState<Shop | 'Toutes'>('Akwa');
+  const [shop, setShop] = useState<Shop>(demo.shops[0].name);
   const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
   const rights = permissionMatrix.map((row) => ({ label: row.label, value: row.values[role] }));
 
@@ -507,9 +510,9 @@ function InviteDialog({
         </fieldset>
 
         <FormField id="invite-shop" label="Boutique">
-          <SelectBox id="invite-shop" value={shop} onChange={(event) => setShop(event.target.value as Shop | 'Toutes')}>
-            {SHOPS.map((name) => (
-              <option key={name}>{name}</option>
+          <SelectBox id="invite-shop" value={shop} onChange={(event) => setShop(event.target.value)}>
+            {demo.shops.map((item) => (
+              <option key={item.name}>{item.name}</option>
             ))}
             <option value="Toutes">Toutes les boutiques</option>
           </SelectBox>

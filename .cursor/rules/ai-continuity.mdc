@@ -1,0 +1,17 @@
+---
+description: Force agents to follow the portable AI continuity kit before coding
+alwaysApply: true
+---
+
+# AI continuity
+
+Before non-trivial changes:
+
+1. Read `AGENTS.md`
+2. Read `HANDOFF.md`
+3. Read `docs/PRODUCT.md` if product intent matters
+4. Follow `docs/knowledge/INDEX.md` for deep context when the task touches architecture, conventions, or UI systems
+
+Update `HANDOFF.md` when ending a multi-step session or leaving WIP.
+
+Do not contradict hard rules in `AGENTS.md` or ADRs in `docs/decisions/`.

@@ -4,8 +4,8 @@ import {
   SWATCHES,
   TODAY_START,
   formatFcfa,
-  type Attribute,
   type AttrValue,
+  type Attribute,
   type Product,
   type ProductStatus,
 } from '../../data/dashboard';
@@ -42,7 +42,7 @@ function combinations(attrs: Attribute[], picked: Record<string, string[]>) {
 type Errors = Partial<Record<'name' | 'cat' | 'price' | string, string>>;
 
 function ProductForm() {
-  const { demo, role, member } = useSession();
+  const { demo, business, role, member } = useSession();
   const editId = useQueryParam('id');
   const editing = editId ? demo.products.find((item) => item.id === editId) : undefined;
   const categories = demo.categories.filter((item) => !item.archived);
@@ -187,7 +187,7 @@ function ProductForm() {
         <p className="mt-1 text-[0.9375rem] text-ink-mute">
           {editing
             ? 'Modifiez les informations et les prix. Les quantités se corrigent depuis la page Stock.'
-            : 'La catégorie choisie propose les bons champs : pointure, mémoire, date d’expiration…'}
+            : `La catégorie choisie propose les bons champs : ${business.samples.fields}`}
         </p>
       </div>
 
@@ -199,7 +199,7 @@ function ProductForm() {
                 <input
                   id="product-name"
                   className={inputClass(Boolean(errors.name))}
-                  placeholder="Ex. Samsung Galaxy A25"
+                  placeholder={business.samples.product}
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                 />
@@ -582,13 +582,14 @@ function AttributeInput({
 
   if (attribute.type === 'multi' || attribute.type === 'color') {
     const selected = Array.isArray(value) ? value : typeof value === 'string' && value ? [value] : [];
+    const options = [...attribute.options, ...selected.filter((item) => !attribute.options.includes(item))];
     return (
       <fieldset className="sm:col-span-2">
         <legend id={id} tabIndex={-1} className="mb-1.5 text-sm font-semibold text-ink">
           {label}
         </legend>
         <div className="flex flex-wrap gap-2">
-          {attribute.options.map((option) => {
+          {options.map((option) => {
             const on = selected.includes(option);
             return (
               <OptionChip
@@ -610,12 +611,13 @@ function AttributeInput({
   }
 
   const text = typeof value === 'string' ? value : '';
+  const options = text && !attribute.options.includes(text) ? [...attribute.options, text] : attribute.options;
   return (
     <FormField id={id} label={label} error={error} hint={attribute.hint}>
       {attribute.type === 'list' ? (
         <SelectBox id={id} value={text} onChange={(event) => onChange(event.target.value)}>
           <option value="">Choisir…</option>
-          {attribute.options.map((option) => (
+          {options.map((option) => (
             <option key={option}>{option}</option>
           ))}
         </SelectBox>

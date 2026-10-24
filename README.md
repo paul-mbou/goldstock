@@ -115,14 +115,14 @@ GOLDSTOCK aide les commerçants à suivre leurs produits, leurs ventes, leurs st
 ```text
 src/
 ├── data/site.ts            # Contenu, liens, tarifs, rôles, FAQ (point d'édition unique)
-├── lib/auth.ts             # Appels API connexion / inscription, validation des numéros +237
+├── lib/auth.ts             # Connexion / inscription Supabase, code email, validation des numéros +237
 ├── layouts/
 │   ├── Layout.astro        # <head> SEO, Open Graph, JSON-LD, lien d'évitement
 │   └── AuthLayout.astro    # Mise en page connexion / essai gratuit
 ├── pages/
 │   ├── index.astro         # Page d'accueil
 │   ├── connexion.astro     # /connexion
-│   └── essai-gratuit.astro # /essai-gratuit (accepte ?formule=…&facturation=…)
+│   └── essai-gratuit.astro # /essai-gratuit
 ├── styles/global.css       # Tokens Tailwind (@theme), utilitaires, animations au défilement
 └── components/
     ├── Header.tsx          # Île React : menu Ressources + menu mobile
@@ -134,23 +134,53 @@ src/
 docs/screenshots/           # Captures utilisées dans ce README
 ```
 
-## Connexion et essai gratuit
+## Connexion et essai gratuit (Supabase)
 
-Les formulaires appellent l'API définie par `PUBLIC_API_URL` (voir `.env.example`) :
+L'inscription et la connexion passent par **Supabase Auth** (email + mot de passe). Après l'inscription, le commerçant reçoit un **lien de confirmation** : il l'ouvre (sur ordinateur ou téléphone), arrive sur `/confirmer-email` et sa boutique s'ouvre directement. Une adresse non confirmée ne peut pas se connecter.
 
-- `POST /auth/login` — `{ phone, password, remember }` ; `401` = identifiants incorrects.
-- `POST /auth/signup` — `{ fullName, shopName, phone, city, password, plan, billing }` ; `409` = numéro déjà utilisé.
+La **double authentification par code email** (6 chiffres à chaque connexion, Edge Function `email-otp`) est en place mais **en pause** tant qu'aucun domaine d'envoi n'est vérifié dans Resend (`EMAIL_CODE_ENABLED` dans `src/lib/auth.ts`). Voir `docs/decisions/0004-supabase-auth-with-email-code.md` et `0005-email-confirmation-instead-of-code.md`.
 
-Le numéro est envoyé au format `+2376XXXXXXXX`, la session passe par cookie (`credentials: 'include'`), et la réponse peut fournir `redirectUrl` (sinon redirection vers `appUrl`).
+Tant que `PUBLIC_SUPABASE_URL` et `PUBLIC_SUPABASE_PUBLISHABLE_KEY` ne sont pas définis, le site reste en **mode test** : n'importe quel email valide ouvre le tableau de bord de démonstration.
 
-Tant que `PUBLIC_API_URL` n'est pas défini, l'essai gratuit masque le mot de passe et prépare la demande sur WhatsApp (nom, boutique, ville, téléphone, formule), et la page de connexion indique que l'accès en ligne ouvre bientôt.
+### Mise en service
+
+1. **Projet Supabase** : créer un projet, puis dans _Authentication → Sign In / Providers → Email_ :
+   - laisser **Email** activé ;
+   - **activer « Confirm email »** tant que le code email est en pause (ADR 0005) ;
+   - mettre la longueur minimale du mot de passe à **8**.
+
+   Puis dans _Authentication → URL Configuration_ : _Site URL_ = l'adresse du site en ligne, et dans _Redirect URLs_ ajouter `http://localhost:*/confirmer-email` et `https://<site>/confirmer-email`. Dans _Authentication → Emails → Confirm signup_, coller `supabase/templates/confirm-signup.html` (objet : « Confirmez votre adresse GOLDSTOCK »).
+
+   Sans domaine, l'envoi intégré de Supabase ne livre qu'aux membres de l'équipe Supabase, quelques emails par heure : pour de vrais clients, configurer un SMTP (_Authentication → Emails → SMTP Settings_).
+
+2. **Base de données** : `npx supabase link --project-ref <ref>` puis `npx supabase db push` (applique toutes les migrations de `supabase/migrations/`).
+3. **Envoi des emails** : créer un compte [Resend](https://resend.com), vérifier le domaine d'envoi (par ex. `goldstock.cm`) et créer une clé API.
+4. **Edge Function** :
+
+   ```bash
+   npx supabase secrets set --project-ref <ref> \
+     RESEND_API_KEY=re_xxx \
+     EMAIL_FROM="GOLDSTOCK <securite@goldstock.cm>" \
+     EMAIL_OTP_SECRET=$(openssl rand -hex 32)
+   npx supabase functions deploy email-otp --project-ref <ref>
+   ```
+
+5. **Variables du site** (dans `.env` en local, et dans Vercel → Settings → Environment Variables) : `PUBLIC_SUPABASE_URL` et `PUBLIC_SUPABASE_PUBLISHABLE_KEY` (_Project Settings → API Keys_). Ne jamais y mettre la clé secrète / `service_role`.
+
+### Ce qui est stocké
+
+- `profiles` : nom, email, téléphone facultatif (`+2376XXXXXXXX`).
+- `shops` : nom, activité (non modifiable), ville. Créées automatiquement à l'inscription par un trigger.
+- `email_otp_challenges` et `verified_sessions` : codes hachés et sessions validées, accessibles seulement par l'Edge Function.
+
+Toutes les tables ont la RLS activée ; `profiles` et `shops` exigent en plus `second_factor_verified()`, qui signifie aujourd'hui « adresse confirmée » et redeviendra « code email validé » à la fin de la pause.
 
 Seuls les composants interactifs sont hydratés (`client:load`, `client:idle`, `client:visible`) ; tout le reste est rendu en HTML statique.
 
 ## Déploiement
 
-Le dépôt est relié à Vercel : chaque push sur `main` déclenche un déploiement de production, et chaque autre branche reçoit une URL de prévisualisation. Les variables d'environnement (`PUBLIC_API_URL`) se règlent dans Vercel, sous Settings → Environment Variables.
+Le dépôt est relié à Vercel : chaque push sur `main` déclenche un déploiement de production, et chaque autre branche reçoit une URL de prévisualisation. Les variables d'environnement (`PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_PUBLISHABLE_KEY`) se règlent dans Vercel, sous Settings → Environment Variables.
 
 ## À configurer avant le lancement
 
-Dans Vercel (ou `.env` en local) : `PUBLIC_API_URL`. Dans `src/data/site.ts` : `appUrl`, `whatsappNumber`, `email`, `demoVideoUrl` (vide = message d'attente avec lien WhatsApp), et les prix des formules. Dans `astro.config.mjs` : `site` (utilisé pour l'URL canonique).
+Dans Vercel (ou `.env` en local) : `PUBLIC_SUPABASE_URL` et `PUBLIC_SUPABASE_PUBLISHABLE_KEY` (voir « Mise en service » ci-dessus). Dans `src/data/site.ts` : `appUrl`, `whatsappNumber`, `email`, `demoVideoUrl` (vide = message d'attente avec lien WhatsApp), et les prix des formules. Dans `astro.config.mjs` : `site` (utilisé pour l'URL canonique).

@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, PackageSearch, Pencil, Plus, Tags } from 'lucide-react';
+import { Archive, ArchiveRestore, Package, PackageSearch, Pencil, Plus, Tags } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { formatFcfa, formatNumber, type Product, type ProductStatus } from '../../data/dashboard';
 import { logActivity, priceRange, productStock, setDemo, stockStatus, useSession } from '../../lib/demo';
@@ -162,7 +162,20 @@ function Products() {
           </div>
         </div>
 
-        {visible.length === 0 ? (
+        {demo.products.length === 0 ? (
+          <EmptyState icon={Package} title="Votre catalogue est vide">
+            <p>
+              Ajoutez vos articles avec leur prix de vente, leur prix d’achat et leur stock. Ils seront aussitôt
+              disponibles en caisse.
+            </p>
+            {role.editCatalog && (
+              <a href="/app/produits/fiche" className="btn-gold mt-5 h-11 px-4">
+                <Plus className="size-[1.125rem]" strokeWidth={2.5} aria-hidden="true" />
+                Ajouter mon premier produit
+              </a>
+            )}
+          </EmptyState>
+        ) : visible.length === 0 ? (
           <EmptyState icon={PackageSearch} title="Aucun produit ne correspond">
             Changez de catégorie ou retirez un filtre.
           </EmptyState>

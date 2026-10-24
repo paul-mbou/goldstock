@@ -126,25 +126,28 @@ export function SalesChart({ points, compareLabel }: { points: ChartPoint[]; com
         )}
       </div>
 
-      <table className="sr-only">
-        <caption>Chiffre d’affaires par période, comparé à {compareLabel}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Période</th>
-            <th scope="col">Chiffre d’affaires</th>
-            <th scope="col">Comparaison</th>
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((point) => (
-            <tr key={point.detail}>
-              <th scope="row">{point.detail}</th>
-              <td>{formatFcfa(point.value)}</td>
-              <td>{formatFcfa(point.previous)}</td>
+      {/* A table ignores the 1px width of `sr-only`, so the wrapper does the clipping. */}
+      <div className="sr-only">
+        <table>
+          <caption>Chiffre d’affaires par période, comparé à {compareLabel}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Période</th>
+              <th scope="col">Chiffre d’affaires</th>
+              <th scope="col">Comparaison</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {points.map((point) => (
+              <tr key={point.detail}>
+                <th scope="row">{point.detail}</th>
+                <td>{formatFcfa(point.value)}</td>
+                <td>{formatFcfa(point.previous)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }

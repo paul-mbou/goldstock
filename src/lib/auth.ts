@@ -3,6 +3,7 @@ import {
   FunctionsHttpError,
   isAuthRetryableFetchError,
   AuthError as SupabaseAuthError,
+  type User,
 } from '@supabase/supabase-js';
 import type { BusinessId } from '../data/businesses';
 import { site } from '../data/site';
@@ -93,6 +94,12 @@ function authErrorOf(error: SupabaseAuthError): AuthError {
 /** Where the confirmation link lands; it must be listed in Supabase → Authentication → URL Configuration. */
 const confirmUrl = () => new URL(site.confirmEmailUrl, window.location.origin).href;
 
+/**
+ * The merchant space stays closed until the address is confirmed. Supabase "Confirm email" already
+ * refuses those sign-ins; this keeps them out even if the setting is switched off by mistake.
+ */
+const isConfirmed = (user: User | null | undefined) => Boolean(user?.email_confirmed_at);
+
 /** A fresh session either still owes the emailed code or may open the merchant space right away. */
 async function afterSignIn(): Promise<'app' | 'verify'> {
   if (EMAIL_CODE_ENABLED) return 'verify';
@@ -106,10 +113,15 @@ export async function login({ email, password, remember }: LoginInput): Promise<
     return { ok: true, next: 'app' };
   }
   setRememberDevice(remember);
-  const { error } = await getSupabase().auth.signInWithPassword({ email, password });
+  const supabase = getSupabase();
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
     const reason = authErrorOf(error);
     return reason === 'confirm-email' ? { ok: true, next: 'check-email' } : { ok: false, error: reason };
+  }
+  if (!isConfirmed(data.user)) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return { ok: true, next: 'check-email' };
   }
   return { ok: true, next: await afterSignIn() };
 }
@@ -130,7 +142,8 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
   }
 
   setRememberDevice(true);
-  const { data, error } = await getSupabase().auth.signUp({
+  const supabase = getSupabase();
+  const { data, error } = await supabase.auth.signUp({
     email: input.email,
     password: input.password,
     options: {
@@ -149,6 +162,10 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
   // With "Confirm email" on, Supabase answers an existing address with a user that has no identity.
   if (!data.user?.identities?.length) return { ok: false, error: 'account-exists' };
   if (!data.session) return { ok: true, next: 'check-email' };
+  if (!isConfirmed(data.user)) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return { ok: true, next: 'check-email' };
+  }
 
   saveDemoSetup(setup);
   return { ok: true, next: await afterSignIn() };
@@ -294,14 +311,19 @@ export async function changePassword(current: string, next: string): Promise<Pas
   return { ok: true };
 }
 
-export type AuthState = { status: 'granted' } | { status: 'sign-in' } | { status: 'verify'; email: string };
+export type AuthState =
+  | { status: 'granted' }
+  | { status: 'sign-in' }
+  | { status: 'confirm-email'; email: string }
+  | { status: 'verify'; email: string };
 
-/** Where the visitor stands: signed out, waiting for the emailed code, or fully signed in. */
+/** Where the visitor stands: signed out, address to confirm, waiting for the emailed code, or fully signed in. */
 export async function getAuthState(): Promise<AuthState> {
   if (!isAuthLive) return { status: 'granted' };
   const supabase = getSupabase();
   const { data } = await supabase.auth.getSession();
   if (!data.session) return { status: 'sign-in' };
+  if (!isConfirmed(data.session.user)) return { status: 'confirm-email', email: data.session.user.email ?? '' };
   if (!EMAIL_CODE_ENABLED) return { status: 'granted' };
   const { data: verified, error } = await supabase.rpc('second_factor_verified');
   if (error) return { status: 'sign-in' };

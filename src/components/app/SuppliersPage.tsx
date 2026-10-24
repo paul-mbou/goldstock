@@ -87,7 +87,7 @@ function Suppliers() {
       )}
 
       {view === 'list' && demo.suppliers.length > 0 && (
-        <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {demo.suppliers.map((supplier) => {
             const last = demo.receptions.find((reception) => reception.supplier === supplier.name);
             return (
@@ -238,7 +238,11 @@ function ReceptionForm({
   };
 
   return (
-    <form noValidate onSubmit={submit} className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <form
+      noValidate
+      onSubmit={submit}
+      className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
+    >
       <Card title="Articles reçus" description="Les quantités s’ajoutent au stock dès la validation.">
         <div className="space-y-4">
           <SelectBox aria-label="Ajouter un article" value={picker} onChange={(event) => addLine(event.target.value)}>
@@ -441,6 +445,7 @@ function NewSupplierDialog({
   return (
     <Modal
       open={open}
+      variant="sheet"
       onClose={onClose}
       title="Nouveau fournisseur"
       footer={
@@ -454,7 +459,7 @@ function NewSupplierDialog({
         </>
       }
     >
-      <form id="new-supplier" noValidate onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+      <form id="new-supplier" noValidate onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField id="supplier-name" label="Nom" error={error} className="sm:col-span-2">
           <input
             id="supplier-name"

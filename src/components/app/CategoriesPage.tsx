@@ -23,6 +23,7 @@ import {
   categoryIcons,
   inputClass,
   toneStyles,
+  useSheet,
   useToasts,
 } from './ui';
 
@@ -68,7 +69,7 @@ function Categories() {
         }
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <nav aria-label="Catégories" className="app-card p-2">
           <ul className="space-y-1">
             {demo.categories.map((category) => {
@@ -343,8 +344,8 @@ function Attributes({
   const { demo } = useSession();
   const [draft, setDraft] = useState<AttrDraft>(emptyDraft);
   const [error, setError] = useState<DraftError | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const editing = category.attrs.find((item) => item.id === editingId);
+  const editSheet = useSheet<string>();
+  const editing = category.attrs.find((item) => item.id === editSheet.value);
   const typeLabel = (id: AttrType) => ATTR_TYPES.find((item) => item.id === id)!.label;
 
   const add = (event: SubmitEvent<HTMLFormElement>) => {
@@ -408,7 +409,7 @@ function Attributes({
                   {attribute.options.length ? attribute.options.join(' · ') : attribute.hint || 'Saisie libre'}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="neutral">{typeLabel(attribute.type)}</Badge>
                 {attribute.variant ? (
                   <Badge tone="warning">
@@ -423,7 +424,7 @@ function Attributes({
                     <button
                       type="button"
                       aria-label={`Modifier ${attribute.name}`}
-                      onClick={() => setEditingId(attribute.id)}
+                      onClick={() => editSheet.show(attribute.id)}
                       className="grid size-9 place-items-center rounded-lg text-ink-mute transition hover:bg-sunken hover:text-ink"
                     >
                       <Pencil className="size-4" aria-hidden="true" />
@@ -470,13 +471,14 @@ function Attributes({
 
       {editing && (
         <EditAttributeDialog
-          key={editing.id}
+          key={editSheet.key}
+          open={editSheet.open}
           category={category}
           attribute={editing}
           products={demo.products}
-          onClose={() => setEditingId(null)}
+          onClose={editSheet.hide}
           onSaved={(name) => {
-            setEditingId(null);
+            editSheet.hide();
             onNotify(`« ${name} » mise à jour.`);
           }}
         />
@@ -548,7 +550,7 @@ function AttributeFields({
       {canVary.includes(draft.type) && (
         <fieldset disabled={locked}>
           <legend className="mb-1.5 text-sm font-semibold text-ink">Utilisation</legend>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {(
               [
                 [false, 'Descriptive', 'Information affichée sur la fiche (marque, matière…).'],
@@ -594,12 +596,14 @@ function AttributeFields({
 }
 
 function EditAttributeDialog({
+  open,
   category,
   attribute,
   products,
   onClose,
   onSaved,
 }: {
+  open: boolean;
   category: Category;
   attribute: Attribute;
   products: Product[];
@@ -635,7 +639,8 @@ function EditAttributeDialog({
 
   return (
     <Modal
-      open
+      open={open}
+      variant="sheet"
       onClose={onClose}
       title={`Modifier « ${attribute.name} »`}
       description={

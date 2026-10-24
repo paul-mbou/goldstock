@@ -195,7 +195,7 @@ function Deposits() {
                 return (
                   <li
                     key={deposit.id}
-                    className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-[minmax(0,1.7fr)_repeat(3,minmax(0,0.8fr))_12rem] lg:items-center"
+                    className="grid grid-cols-1 gap-4 px-4 py-4 sm:px-5 lg:grid-cols-[minmax(0,1.7fr)_repeat(3,minmax(0,0.8fr))_12rem] lg:items-center"
                   >
                     <div className="flex items-center gap-3">
                       <span
@@ -484,6 +484,7 @@ function DeclareDialog({
   return (
     <Modal
       open={open}
+      variant="sheet"
       onClose={close}
       title="Déclarer un versement"
       description="Le propriétaire est prévenu et vérifie le montant."
@@ -498,7 +499,7 @@ function DeclareDialog({
         </>
       }
     >
-      <form id="declare-deposit" noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2">
+      <form id="declare-deposit" noValidate onSubmit={submit} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <FormField id="declare-shop" label="Boutique">
           {shops.length === 1 ? (
             <input id="declare-shop" className={inputClass()} value={shop} readOnly />

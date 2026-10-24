@@ -191,10 +191,10 @@ function ProductForm() {
         </p>
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-6">
           <Card title="Informations">
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <FormField id="product-name" label="Nom du produit" error={errors.name} className="sm:col-span-2">
                 <input
                   id="product-name"
@@ -258,7 +258,7 @@ function ProductForm() {
 
           {category && descriptive.length > 0 && (
             <Card title="Caractéristiques" description={`Les champs de la catégorie ${category.name}.`}>
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 {descriptive.map((item) => (
                   <AttributeInput
                     key={item.id}
@@ -282,7 +282,7 @@ function ProductForm() {
               }
             >
               <div className="space-y-6">
-                <div className="grid gap-5 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                   <FormField id="product-price" label="Prix de vente (FCFA)" error={errors.price}>
                     <input
                       id="product-price"
@@ -367,7 +367,7 @@ function ProductForm() {
                         return (
                           <li
                             key={key}
-                            className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_9rem_7rem] sm:items-center"
+                            className="grid grid-cols-1 gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_9rem_7rem] sm:items-center"
                           >
                             <div className="min-w-0">
                               <p className="font-semibold text-ink">{key}</p>
@@ -419,7 +419,7 @@ function ProductForm() {
                 {editing.variants.map((variant) => (
                   <li
                     key={variant.id}
-                    className="grid gap-3 px-5 py-3.5 sm:grid-cols-[minmax(0,1fr)_9rem_9rem_5rem] sm:items-center sm:px-6"
+                    className="grid grid-cols-1 gap-3 px-5 py-3.5 sm:grid-cols-[minmax(0,1fr)_9rem_9rem_5rem] sm:items-center sm:px-6"
                   >
                     <div className="min-w-0">
                       <p className="font-semibold text-ink">{variant.label || 'Standard'}</p>

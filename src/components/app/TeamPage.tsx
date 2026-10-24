@@ -118,7 +118,7 @@ function Team() {
         }
       />
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <section aria-label="Membres" className="app-card overflow-hidden">
           <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <p className="text-sm text-ink-mute">
@@ -303,7 +303,7 @@ function MemberRow({
           {isMe && <Badge tone="warning">Vous</Badge>}
         </p>
         <p className="truncate text-sm leading-snug text-ink-mute">
-          {member.shop === 'Toutes' ? 'Toutes les boutiques' : member.shop} · {member.phone}
+          {[member.shop === 'Toutes' ? 'Toutes les boutiques' : member.shop, member.phone].filter(Boolean).join(' · ')}
         </p>
       </div>
       <div className="hidden w-36 shrink-0 space-y-0.5 text-sm @2xl:block">
@@ -471,7 +471,7 @@ function InviteDialog({
 
         <fieldset>
           <legend className="mb-2 text-sm font-semibold text-ink">Rôle</legend>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {assignable.map((item) => (
               <label
                 key={item}

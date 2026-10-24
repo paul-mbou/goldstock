@@ -80,7 +80,7 @@ export function InvoiceDialog({ sale: initial, onClose }: { sale: Sale; onClose:
       }
     >
       <div className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <TextField
               id="invoice-customer"

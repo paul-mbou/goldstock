@@ -1,4 +1,4 @@
-import { BanknoteArrowDown, Banknote, ChartPie, Plus, SearchX, Trash2, TrendingUp } from 'lucide-react';
+import { Banknote, BanknoteArrowDown, ChartPie, Plus, SearchX, Trash2, TrendingUp } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
 import {
   DAY,
@@ -159,7 +159,7 @@ function Expenses() {
         </StatCard>
       </section>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <section aria-label="Liste des dépenses" className="app-card overflow-hidden">
           <div className="space-y-3 border-b border-line p-4 sm:p-5">
             <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center">
@@ -423,6 +423,7 @@ function ExpenseDialog({
   return (
     <Modal
       open={open}
+      variant="sheet"
       onClose={close}
       title="Nouvelle dépense"
       description="Elle sera déduite de votre bénéfice du mois."
@@ -437,7 +438,7 @@ function ExpenseDialog({
         </>
       }
     >
-      <form id="new-expense" noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2">
+      <form id="new-expense" noValidate onSubmit={submit} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <FormField id="expense-reason" label="Motif" error={errors.reason} className="sm:col-span-2">
           <input
             id="expense-reason"

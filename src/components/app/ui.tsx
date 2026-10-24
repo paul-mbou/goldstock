@@ -698,33 +698,68 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const sheet = variant === 'sheet';
+  const openRef = useRef(open);
+  openRef.current = open;
+
+  /* While a sheet slides out, keep showing what it showed when it was asked to close. */
+  const content = useRef({ title, description, children, footer });
+  if (open) content.current = { title, description, children, footer };
+  const shown = content.current;
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
+    if (open) {
+      delete dialog.dataset.closing;
+      if (!dialog.open) dialog.showModal();
+      return;
+    }
+    if (!dialog.open) return;
+    if (!sheet) {
+      dialog.close();
+      return;
+    }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      dialog.close();
+      delete dialog.dataset.closing;
+    };
+    const onEnd = (event: AnimationEvent) => event.animationName === 'sheet-out' && finish();
+    dialog.dataset.closing = '';
+    dialog.addEventListener('animationend', onEnd);
+    const fallback = window.setTimeout(finish, SHEET_EXIT_MS + 80);
+    return () => {
+      dialog.removeEventListener('animationend', onEnd);
+      window.clearTimeout(fallback);
+    };
+  }, [open, sheet]);
 
-  const frame =
-    variant === 'sheet'
-      ? 'mr-0 ml-auto h-dvh max-h-dvh w-full max-w-lg animate-sheet-in rounded-none sm:rounded-l-3xl'
-      : `m-auto max-h-[calc(100dvh-2rem)] ${wide ? 'w-[min(46rem,calc(100%-2rem))]' : 'w-[min(34rem,calc(100%-2rem))]'} animate-dialog-in rounded-3xl`;
+  const frame = sheet
+    ? 'mr-0 ml-auto h-dvh max-h-dvh w-full max-w-lg animate-sheet-in rounded-none sm:rounded-l-3xl data-closing:pointer-events-none data-closing:animate-sheet-out data-closing:backdrop:animate-backdrop-out'
+    : `m-auto max-h-[calc(100dvh-2rem)] ${wide ? 'w-[min(46rem,calc(100%-2rem))]' : 'w-[min(34rem,calc(100%-2rem))]'} animate-dialog-in rounded-3xl`;
 
   return (
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      onClose={onClose}
+      onCancel={(event) => {
+        if (!sheet) return;
+        event.preventDefault();
+        onClose();
+      }}
+      onClose={() => openRef.current && onClose()}
       onClick={(event) => event.target === ref.current && onClose()}
-      className={`${frame} flex-col overflow-hidden border border-line bg-panel p-0 text-ink shadow-2xl backdrop:bg-navy-950/60 backdrop:backdrop-blur-[2px] open:flex`}
+      className={`${frame} flex-col overflow-hidden border border-line bg-panel p-0 text-ink shadow-2xl backdrop:animate-backdrop-in backdrop:bg-navy-950/60 backdrop:backdrop-blur-[2px] open:flex`}
     >
       <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-5">
         <div>
           <h2 id={titleId} className="text-lg font-bold">
-            {title}
+            {shown.title}
           </h2>
-          {description && <p className="mt-0.5 text-sm text-ink-mute">{description}</p>}
+          {shown.description && <p className="mt-0.5 text-sm text-ink-mute">{shown.description}</p>}
         </div>
         <button
           type="button"
@@ -735,12 +770,38 @@ export function Modal({
           <X className="size-5" aria-hidden="true" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-      {footer && (
-        <div className="flex flex-wrap justify-end gap-2.5 border-t border-line bg-sunken/60 px-6 py-4">{footer}</div>
+      <div className="flex-1 overflow-y-auto px-6 py-5">{shown.children}</div>
+      {shown.footer && (
+        <div className="flex flex-wrap justify-end gap-2.5 border-t border-line bg-sunken/60 px-6 py-4">
+          {shown.footer}
+        </div>
       )}
     </dialog>
   );
+}
+
+const SHEET_EXIT_MS = 200;
+
+/**
+ * Open / close state for a sheet that must stay mounted while it slides out.
+ * `key` changes on every opening, so the sheet's form starts fresh each time.
+ */
+export function useSheet<T>() {
+  const [state, setState] = useState<{ value: T | null; open: boolean; key: number }>({
+    value: null,
+    open: false,
+    key: 0,
+  });
+  const show = useCallback((value: T) => setState((current) => ({ value, open: true, key: current.key + 1 })), []);
+  const hide = useCallback(() => setState((current) => ({ ...current, open: false })), []);
+  return { ...state, show, hide };
+}
+
+/** The last non-empty value, so a closing sheet keeps its data until it has slid out. */
+export function useLatest<T>(value: T | null | undefined) {
+  const last = useRef(value);
+  if (value != null) last.current = value;
+  return last.current;
 }
 
 /* ------------------------------------------------------------------ feedback */

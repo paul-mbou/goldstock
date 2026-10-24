@@ -224,7 +224,7 @@ function CompanyForm({ onSaved }: { onSaved: () => void }) {
 
   return (
     <Card title="Entreprise" description="Affichée sur vos reçus et dans les messages envoyés à vos clients.">
-      <form noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2">
+      <form noValidate onSubmit={submit} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <FormField id="set-shop" label="Nom commercial" error={error}>
           <input
             id="set-shop"
@@ -449,7 +449,7 @@ function PosSettings({ onSaved }: { onSaved: (message: string) => void }) {
   const sample = demo.sales.find((sale) => !sale.cancelled && sale.lines.length > 1) ?? demo.sales[0];
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
       <div className="space-y-6">
         <Card title="Caisse">
           <div className="flex items-start justify-between gap-4">
@@ -575,7 +575,7 @@ function Appearance() {
 
   return (
     <Card title="Apparence" description="Le thème sombre repose les yeux en fin de journée.">
-      <div role="radiogroup" aria-label="Thème" className="grid gap-3 sm:grid-cols-3">
+      <div role="radiogroup" aria-label="Thème" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {(
           [
             { id: 'light', label: 'Clair', icon: Sun },
@@ -720,7 +720,7 @@ function PasswordCard({ onNotify }: { onNotify: (message: string) => void }) {
       title="Mot de passe"
       description="Après le changement, vos autres appareils sont déconnectés. Reconnectez-les avec le nouveau mot de passe."
     >
-      <form noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2">
+      <form noValidate onSubmit={submit} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <FormField id="password-current" label="Mot de passe actuel" error={errors.current}>
           <input {...field('current')} autoComplete="current-password" />
         </FormField>

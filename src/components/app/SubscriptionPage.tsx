@@ -58,7 +58,7 @@ function Subscription() {
     <div className="space-y-6">
       <PageHeader title="Abonnement" description="Votre formule, son utilisation et vos factures." />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <section
           aria-labelledby="current-plan"
           className="relative overflow-hidden rounded-2xl bg-navy-950 p-6 text-white ring-1 ring-white/10 dark:bg-linear-to-br dark:from-navy-800 dark:to-navy-950 dark:ring-gold-400/20"
@@ -142,7 +142,7 @@ function Subscription() {
             ]}
           />
         </div>
-        <ul className="grid gap-4 md:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {plans.map((plan) => {
             const id = plan.id as PlanId;
             const isCurrent = id === current.id;
@@ -317,7 +317,7 @@ function CheckoutDialog({
       <div className="space-y-5">
         <fieldset>
           <legend className="mb-2 text-sm font-semibold text-ink">Moyen de paiement</legend>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {payMethods.map((item) => (
               <label
                 key={item.id}

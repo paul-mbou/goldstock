@@ -174,7 +174,7 @@ function Reports() {
         <SalesChart points={chartPoints(period, sales)} compareLabel={meta.compare} />
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card title="Ventes par catégorie">
           {byCategory.length ? (
             <BarList rows={byCategory} format={formatFcfa} />
@@ -195,7 +195,7 @@ function Reports() {
         )}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card title="Produits les plus vendus" className="overflow-hidden xl:col-span-2" bodyClassName="">
           <div className="overflow-x-auto border-t border-line">
             <table className="w-full min-w-[34rem] text-sm">

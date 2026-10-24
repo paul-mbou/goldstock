@@ -48,6 +48,7 @@ import {
   inputClass,
   linkClass,
   useQueryParam,
+  useSheet,
   useToasts,
   type Tone,
 } from './ui';
@@ -76,7 +77,7 @@ function Stock() {
   const { demo, role } = session;
   const [view, setView] = useState<View>('state');
   const [adjusting, setAdjusting] = useState<Item | null>(null);
-  const [moving, setMoving] = useState<Direction | null>(null);
+  const moveSheet = useSheet<Direction>();
   const { notify, region } = useToasts();
   const items = flatItems(demo);
 
@@ -98,11 +99,11 @@ function Stock() {
         description="Quantités par article, mouvements et inventaire."
         actions={
           <>
-            <button type="button" className="btn-quiet h-11 px-4" onClick={() => setMoving('out')}>
+            <button type="button" className="btn-quiet h-11 px-4" onClick={() => moveSheet.show('out')}>
               <PackageMinus className="size-[1.125rem]" aria-hidden="true" />
               Sortie
             </button>
-            <button type="button" className="btn-gold h-11 px-4" onClick={() => setMoving('in')}>
+            <button type="button" className="btn-gold h-11 px-4" onClick={() => moveSheet.show('in')}>
               <PackagePlus className="size-[1.125rem]" aria-hidden="true" />
               Entrée
             </button>
@@ -167,14 +168,16 @@ function Stock() {
           notify(`${item.full} : ${delta > 0 ? '+' : ''}${delta} (${MOVE_LABELS[type].toLowerCase()}).`);
         }}
       />
-      {moving && (
+      {moveSheet.value && (
         <MoveDialog
-          initialDirection={moving}
+          key={moveSheet.key}
+          open={moveSheet.open}
+          initialDirection={moveSheet.value}
           items={items}
-          onClose={() => setMoving(null)}
+          onClose={moveSheet.hide}
           onSave={(input, item) => {
             recordMove(input);
-            setMoving(null);
+            moveSheet.hide();
             setView('moves');
             notify(
               input.direction === 'in'
@@ -624,7 +627,7 @@ function AdjustDialog({
         <div className="space-y-5">
           <fieldset>
             <legend className="mb-1.5 text-sm font-semibold text-ink">Motif</legend>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {adjustTypes.map((entry) => (
                 <label
                   key={entry.id}
@@ -748,11 +751,13 @@ const TODAY = dayKey(NOW);
 type MoveErrors = Partial<Record<'item' | 'qty' | 'detail' | 'day', string>>;
 
 function MoveDialog({
+  open,
   initialDirection,
   items,
   onClose,
   onSave,
 }: {
+  open: boolean;
   initialDirection: Direction;
   items: Item[];
   onClose: () => void;
@@ -802,7 +807,8 @@ function MoveDialog({
     else if (!entry && stock === 0) found.item = 'Cet article est en rupture : rien à sortir.';
     else if (!entry && qty > stock) found.qty = `Il n’en reste que ${stock} en stock.`;
     if (qty < 1) found.qty = 'Indiquez une quantité d’au moins 1.';
-    if (kind.detail === 'supplier' && !supplierId) found.detail = 'Ajoutez d’abord un fournisseur.';
+    if (kind.detail === 'supplier' && !supplierId)
+      found.detail = 'Aucun fournisseur : ajoutez-en un ou choisissez une autre provenance.';
     if (kind.detail !== 'supplier' && kind.detail.required && detail.trim().length < 2)
       found.detail = entry ? 'Indiquez la provenance.' : 'Indiquez la destination.';
     if (!day || day > TODAY) found.day = 'Choisissez une date passée ou aujourd’hui.';
@@ -829,7 +835,8 @@ function MoveDialog({
 
   return (
     <Modal
-      open
+      open={open}
+      variant="sheet"
       onClose={onClose}
       title={entry ? 'Entrée de stock' : 'Sortie de stock'}
       description={
@@ -943,7 +950,23 @@ function MoveDialog({
           </div>
         </fieldset>
 
-        {kind.detail === 'supplier' ? (
+        {kind.detail === 'supplier' && !demo.suppliers.length ? (
+          <p id="move-detail" tabIndex={-1} className="rounded-xl bg-sunken px-4 py-3 text-sm text-ink-soft">
+            Aucun fournisseur enregistré.{' '}
+            {can('suppliers') ? (
+              <a href="/app/fournisseurs" className={linkClass}>
+                Ajouter un fournisseur
+              </a>
+            ) : (
+              'Choisissez une autre provenance.'
+            )}
+            {errors.detail && (
+              <span role="alert" className="mt-1 block font-medium text-red-600 dark:text-red-400">
+                {errors.detail}
+              </span>
+            )}
+          </p>
+        ) : kind.detail === 'supplier' ? (
           <FormField
             id="move-detail"
             label="Fournisseur"
@@ -992,7 +1015,7 @@ function MoveDialog({
           </FormField>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField id="move-day" label="Date" error={errors.day}>
             <input
               id="move-day"

@@ -64,10 +64,10 @@ function Support() {
     <div className="space-y-6">
       <PageHeader title="Assistance" description="Une question, un souci ? Notre équipe est disponible 7 j/7." />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <Card title="Nouvelle demande">
           <form noValidate onSubmit={submit} className="space-y-5">
-            <div className="grid gap-5 sm:grid-cols-[14rem_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-[14rem_minmax(0,1fr)]">
               <FormField id="ticket-topic" label="Sujet">
                 <SelectBox id="ticket-topic" value={topic} onChange={(event) => setTopic(event.target.value)}>
                   {topics.map((item) => (

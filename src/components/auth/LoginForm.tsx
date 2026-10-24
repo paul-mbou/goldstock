@@ -51,6 +51,7 @@ export default function LoginForm() {
     if (!isAuthLive) return;
     getAuthState().then((state) => {
       if (state.status === 'granted') window.location.replace(site.appUrl);
+      else if (state.status === 'confirm-email') setConfirmEmail(state.email);
       else if (state.status === 'verify') setCodeEmail(state.email);
     });
   }, []);

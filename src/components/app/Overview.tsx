@@ -121,7 +121,7 @@ function Dashboard() {
         </StatCard>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card
           className="xl:col-span-2"
           title="Évolution du chiffre d’affaires"
@@ -150,7 +150,7 @@ function Dashboard() {
         {can('deposits') ? <DepositsCheck /> : <PaymentMix totals={current} />}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <RecentSales />
         <div className="space-y-6">
           {can('deposits') && <PaymentMix totals={current} />}
@@ -529,7 +529,7 @@ function StockDashboard() {
         </StatCard>
         <StatCard label="À réapprovisionner" value={alerts.length} icon={PackageX} tone="danger" />
       </section>
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <StockAlertsCard limit={8} className="xl:col-span-2" />
         <Card title="Derniers mouvements" bodyClassName="px-2 pb-3 sm:px-3">
           {demo.moves.length === 0 && (

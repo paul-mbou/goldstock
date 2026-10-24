@@ -29,6 +29,7 @@ GOLDSTOCK is a stock and sales management tool for Cameroonian shops: a static m
 9. Site copy, links, plans and roles are edited in `src/data/site.ts`; dashboard seed data in `src/data/dashboard.ts` and `src/data/catalogs.ts`.
 10. Prefer existing patterns in the codebase over inventing new ones.
 11. Never commit secrets (`.env*` is ignored, only `.env.example` is tracked).
+12. **Long forms open in the right-hand sheet** (`<Modal variant="sheet">` from `ui.tsx`): anything with about five fields or more, or that would scroll. Centered dialogs are only for short forms, confirmations and choices.
 
 ## Layout map
 

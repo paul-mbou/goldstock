@@ -32,6 +32,7 @@ import {
   SelectBox,
   StatusBadge,
   Stepper,
+  useLatest,
   useQueryParam,
   useToasts,
 } from './ui';
@@ -142,7 +143,7 @@ function Sales() {
               className="flex-1 xl:max-w-md"
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-3 xl:flex">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:flex">
             <SelectBox
               aria-label="Moyen de paiement"
               value={pay}
@@ -337,7 +338,7 @@ function Sales() {
 }
 
 function SaleDetail({
-  sale,
+  sale: current,
   canEdit,
   onClose,
   onCancel,
@@ -352,12 +353,13 @@ function SaleDetail({
   const [mode, setMode] = useState<'view' | 'return' | 'cancel' | 'receipt'>('view');
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [invoicing, setInvoicing] = useState(false);
+  const sale = useLatest(current);
 
   useEffect(() => {
     setMode('view');
     setQuantities({});
     setInvoicing(false);
-  }, [sale?.id]);
+  }, [current?.id]);
 
   if (!sale) return null;
   const state = saleState(sale);
@@ -445,7 +447,7 @@ function SaleDetail({
   return (
     <>
       <Modal
-        open
+        open={Boolean(current)}
         variant="sheet"
         onClose={onClose}
         title={`Vente ${sale.id}`}

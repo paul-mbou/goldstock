@@ -68,7 +68,10 @@
   --animate-fade-up: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-float: float 4.6s ease-in-out infinite;
   --animate-dialog-in: dialog-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-sheet-in: sheet-in 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-sheet-in: sheet-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-sheet-out: sheet-out 0.2s cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-backdrop-in: backdrop-in 0.28s ease-out both;
+  --animate-backdrop-out: backdrop-out 0.2s ease-in both;
   --animate-drawer-in: drawer-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 
   @keyframes drawer-in {
@@ -87,13 +90,31 @@
 
   @keyframes sheet-in {
     from {
-      opacity: 0.4;
-      transform: translateX(40px);
+      opacity: 0;
+      transform: translateX(2rem);
+    }
+  }
+
+  @keyframes sheet-out {
+    to {
+      opacity: 0;
+      transform: translateX(2rem);
+    }
+  }
+
+  @keyframes backdrop-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes backdrop-out {
+    to {
+      opacity: 0;
     }
   }
 
   @keyframes float {
-
     0%,
     100% {
       transform: translateY(0);
@@ -216,27 +237,27 @@
     animation-duration: 1.4s;
   }
 
-  [data-reveal-stagger]> :nth-child(2) {
+  [data-reveal-stagger] > :nth-child(2) {
     --i: 1;
   }
 
-  [data-reveal-stagger]> :nth-child(3) {
+  [data-reveal-stagger] > :nth-child(3) {
     --i: 2;
   }
 
-  [data-reveal-stagger]> :nth-child(4) {
+  [data-reveal-stagger] > :nth-child(4) {
     --i: 3;
   }
 
-  [data-reveal-stagger]> :nth-child(5) {
+  [data-reveal-stagger] > :nth-child(5) {
     --i: 4;
   }
 
-  [data-reveal-stagger]> :nth-child(6) {
+  [data-reveal-stagger] > :nth-child(6) {
     --i: 5;
   }
 
-  [data-reveal-stagger]> :nth-child(n + 7) {
+  [data-reveal-stagger] > :nth-child(n + 7) {
     --i: 6;
   }
 }

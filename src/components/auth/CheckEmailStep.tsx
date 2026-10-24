@@ -1,10 +1,39 @@
-import { ArrowLeft, ExternalLink, LoaderCircle, MailCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  ExternalLink,
+  LoaderCircle,
+  LockKeyhole,
+  Mail,
+  MailCheck,
+  type LucideIcon,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { site } from '../../data/site';
 import { getAuthState, resendConfirmation, type ResendError } from '../../lib/auth';
 import { FormAlert } from './fields';
 
 const RESEND_COOLDOWN_SECONDS = 60;
+
+type StepState = 'done' | 'current' | 'locked';
+
+const steps: { label: string; state: StepState; Icon: LucideIcon }[] = [
+  { label: 'Compte créé', state: 'done', Icon: Check },
+  { label: 'Adresse email confirmée', state: 'current', Icon: Mail },
+  { label: 'Accès au tableau de bord', state: 'locked', Icon: LockKeyhole },
+];
+
+const stateLabels: Record<StepState, string> = {
+  done: 'Fait',
+  current: 'En attente',
+  locked: 'Après confirmation',
+};
+
+const stateColors: Record<StepState, string> = {
+  done: 'text-emerald-700',
+  current: 'text-gold-700',
+  locked: 'text-navy-400',
+};
 
 const resendMessages: Record<ResendError, string> = {
   'rate-limited': 'Trop d’emails demandés. Patientez quelques minutes avant de réessayer.',
@@ -85,6 +114,33 @@ export function CheckEmailStep({ email, justSent, onBack, backLabel }: Props) {
           s’active et votre boutique s’ouvre automatiquement.
         </p>
       </div>
+
+      <ol className="grid gap-2 text-sm" aria-label="Étapes d’activation">
+        {steps.map(({ label, state, Icon }) => (
+          <li
+            key={label}
+            className={`flex items-center gap-3 rounded-xl border px-3.5 py-2.5 ${
+              state === 'current' ? 'border-gold-300 bg-gold-50' : 'border-navy-100'
+            }`}
+          >
+            <span
+              className={`grid size-7 shrink-0 place-items-center rounded-full ${
+                state === 'done'
+                  ? 'bg-emerald-50 text-emerald-600'
+                  : state === 'current'
+                    ? 'bg-gold-400 text-navy-950'
+                    : 'bg-navy-50 text-navy-400'
+              }`}
+            >
+              <Icon className="size-3.5" aria-hidden="true" />
+            </span>
+            <span className={`flex-1 font-semibold ${state === 'locked' ? 'text-navy-400' : 'text-navy-800'}`}>
+              {label}
+            </span>
+            <span className={`text-xs font-medium ${stateColors[state]}`}>{stateLabels[state]}</span>
+          </li>
+        ))}
+      </ol>
 
       {error && <FormAlert>{resendMessages[error]}</FormAlert>}
       {notice && !error && (

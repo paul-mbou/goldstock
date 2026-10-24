@@ -35,7 +35,7 @@ const current = Astro.url.pathname.replace(/\/+$/, '') || '/';
         visibility: hidden;
       }
     </style>
-    {/* Only a session that passed the emailed code may see the merchant space. */}
+    {/* Only a confirmed address (and, once it is back on, the emailed code) may see the merchant space. */}
     <script>
       import { site } from '../data/site';
       import { getAuthState } from '../lib/auth';

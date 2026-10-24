@@ -6,6 +6,7 @@ import {
   Footprints,
   LoaderCircle,
   LockKeyhole,
+  MailCheck,
   Scissors,
   Shirt,
   ShoppingBasket,
@@ -280,6 +281,11 @@ export default function SignupForm() {
         required
         value={values.email}
         error={visibleError('email')}
+        hint={
+          isAuthLive
+            ? 'Utilisez une adresse que vous consultez : vous y recevrez le lien qui active votre compte.'
+            : undefined
+        }
         onChange={(event) => update('email', event.target.value)}
         onBlur={touch('email')}
       />
@@ -331,8 +337,9 @@ export default function SignupForm() {
                 {[1, 2, 3].map((level) => (
                   <span
                     key={level}
-                    className={`h-1.5 flex-1 rounded-full transition-colors ${strength >= level ? strengthColors[strength] : 'bg-navy-100'
-                      }`}
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${
+                      strength >= level ? strengthColors[strength] : 'bg-navy-100'
+                    }`}
                   />
                 ))}
               </div>
@@ -340,6 +347,18 @@ export default function SignupForm() {
             </div>
           )}
         </div>
+      )}
+
+      {isAuthLive && (
+        <p className="flex gap-3 rounded-xl bg-navy-50 px-4 py-3 text-sm leading-relaxed text-navy-600">
+          <MailCheck className="mt-0.5 size-4 shrink-0 text-gold-600" aria-hidden="true" />
+          <span>
+            Après ce formulaire, confirmez votre adresse en ouvrant le lien reçu par email.{' '}
+            <strong className="font-semibold text-navy-800">
+              Votre tableau de bord s’ouvre seulement une fois l’adresse confirmée.
+            </strong>
+          </span>
+        </p>
       )}
 
       <button type="submit" disabled={pending} className="btn-gold h-12 w-full text-base disabled:opacity-70">
@@ -389,12 +408,13 @@ function BusinessPicker({
           return (
             <label
               key={business.id}
-              className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition has-focus-visible:outline-2 has-focus-visible:outline-gold-400 ${selected
+              className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition has-focus-visible:outline-2 has-focus-visible:outline-gold-400 ${
+                selected
                   ? 'border-gold-400 bg-gold-50 ring-1 ring-gold-400'
                   : error
                     ? 'border-red-300 bg-white hover:border-red-400'
                     : 'border-navy-200 bg-white hover:border-navy-300'
-                }`}
+              }`}
             >
               <input
                 type="radio"
@@ -409,8 +429,9 @@ function BusinessPicker({
                 className="sr-only"
               />
               <span
-                className={`grid size-9 shrink-0 place-items-center rounded-lg transition ${selected ? 'bg-gold-400 text-navy-950' : 'bg-navy-50 text-navy-600'
-                  }`}
+                className={`grid size-9 shrink-0 place-items-center rounded-lg transition ${
+                  selected ? 'bg-gold-400 text-navy-950' : 'bg-navy-50 text-navy-600'
+                }`}
               >
                 <Icon className="size-[1.125rem]" aria-hidden="true" />
               </span>

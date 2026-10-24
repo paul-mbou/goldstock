@@ -137,7 +137,7 @@ function Products() {
               className="flex-1 xl:max-w-sm"
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:flex">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:flex">
             <SelectBox
               aria-label="Statut"
               value={status}

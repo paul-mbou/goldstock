@@ -11,16 +11,17 @@ type Props = {
   title: string;
   description: string;
   noindex?: boolean;
+  referrerPolicy?: string;
   asideTitle: string;
   asideText: string;
   points: string[];
   width?: 'md' | 'lg';
 };
 
-const { title, description, noindex, asideTitle, asideText, points, width = 'md' } = Astro.props;
+const { title, description, noindex, referrerPolicy, asideTitle, asideText, points, width = 'md' } = Astro.props;
 ---
 
-<Layout title={title} description={description} noindex={noindex}>
+<Layout title={title} description={description} noindex={noindex} referrerPolicy={referrerPolicy}>
   <div class="grid grid-cols-1 min-h-dvh lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
     <aside class="relative isolate hidden overflow-hidden bg-navy-950 text-white lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col">
       <div class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">

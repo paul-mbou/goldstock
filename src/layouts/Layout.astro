@@ -7,9 +7,11 @@ type Props = {
   title?: string;
   description?: string;
   noindex?: boolean;
+  /** Set on pages that may carry auth tokens in the URL (confirmation link). */
+  referrerPolicy?: string;
 };
 
-const { title = site.title, description = site.description, noindex = false } = Astro.props;
+const { title = site.title, description = site.description, noindex = false, referrerPolicy } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 
 const organizationSchema = {
@@ -34,6 +36,7 @@ const organizationSchema = {
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     {noindex && <meta name="robots" content="noindex" />}
+    {referrerPolicy && <meta name="referrer" content={referrerPolicy} />}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="theme-color" content="#070f1f" />
 

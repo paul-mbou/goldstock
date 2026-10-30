@@ -205,22 +205,29 @@ export async function completeEmailConfirmation(): Promise<ConfirmResult> {
 
   let error: SupabaseAuthError | null = null;
   if (tokenHash) {
-    const type = query.get('type') === 'signup' ? 'signup' : 'email';
-    ({ error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type }));
+    // Only signup confirmation links belong on this page (not recovery / magic / email-change).
+    if (query.get('type') !== 'signup') return { ok: false, error: 'invalid' };
+    ({ error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'signup' }));
   } else if (accessToken && refreshToken) {
     ({ error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }));
   } else if (code) {
     ({ error } = await supabase.auth.exchangeCodeForSession(code));
   } else {
     // Link opened twice: the first visit already signed this browser in.
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) return { ok: false, error: 'invalid' };
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return { ok: false, error: 'invalid' };
   }
 
   if (error) {
     const reason = authErrorOf(error);
     if (reason === 'network') return { ok: false, error: 'network' };
     return { ok: false, error: error.code === 'otp_expired' ? 'expired' : 'invalid' };
+  }
+
+  const { data: confirmed, error: userError } = await supabase.auth.getUser();
+  if (userError || !isConfirmed(confirmed.user)) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return { ok: false, error: 'invalid' };
   }
   return { ok: true, next: await afterSignIn() };
 }
@@ -277,9 +284,9 @@ export type PasswordError =
 export type PasswordResult = { ok: true } | { ok: false; error: PasswordError };
 
 /**
- * Checks the current password by signing in again, sets the new one, then signs every other
- * device out. Signing in again opens a fresh session: once EMAIL_CODE_ENABLED is back on,
- * that session must be marked verified too or the owner gets sent back to the code step.
+ * Checks the current password via `current_password` (keeps the same session_id, so the emailed
+ * code step is not lost when EMAIL_CODE_ENABLED is back on), then signs every other device out.
+ * Requires « Secure password change » in Supabase → Authentication → Providers → Email.
  */
 export async function changePassword(current: string, next: string): Promise<PasswordResult> {
   if (!isAuthLive) {
@@ -287,20 +294,15 @@ export async function changePassword(current: string, next: string): Promise<Pas
     return { ok: true };
   }
   const supabase = getSupabase();
-  const { data } = await supabase.auth.getSession();
-  const email = data.session?.user.email;
-  if (!email) return { ok: false, error: 'unknown' };
-
-  const { error: checkError } = await supabase.auth.signInWithPassword({ email, password: current });
-  if (checkError) {
-    const reason = authErrorOf(checkError);
-    if (reason === 'invalid-credentials') return { ok: false, error: 'wrong-password' };
-    return { ok: false, error: reason === 'rate-limited' || reason === 'network' ? reason : 'unknown' };
-  }
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user?.email) return { ok: false, error: 'unknown' };
 
   const { error } = await supabase.auth.updateUser({ password: next, current_password: current });
   if (error) {
     if (error.code === 'same_password') return { ok: false, error: 'same-password' };
+    if (error.code === 'invalid_credentials' || /current.?password|incorrect/i.test(error.message)) {
+      return { ok: false, error: 'wrong-password' };
+    }
     const reason = authErrorOf(error);
     return {
       ok: false,
@@ -321,13 +323,17 @@ export type AuthState =
 export async function getAuthState(): Promise<AuthState> {
   if (!isAuthLive) return { status: 'granted' };
   const supabase = getSupabase();
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) return { status: 'sign-in' };
-  if (!isConfirmed(data.session.user)) return { status: 'confirm-email', email: data.session.user.email ?? '' };
+  // getUser() revalidates with Auth (getSession() only reads local storage).
+  const { data, error: userError } = await supabase.auth.getUser();
+  if (userError || !data.user) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return { status: 'sign-in' };
+  }
+  if (!isConfirmed(data.user)) return { status: 'confirm-email', email: data.user.email ?? '' };
   if (!EMAIL_CODE_ENABLED) return { status: 'granted' };
   const { data: verified, error } = await supabase.rpc('second_factor_verified');
   if (error) return { status: 'sign-in' };
-  return verified ? { status: 'granted' } : { status: 'verify', email: data.session.user.email ?? '' };
+  return verified ? { status: 'granted' } : { status: 'verify', email: data.user.email ?? '' };
 }
 
 export async function signOut() {

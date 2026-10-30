@@ -25,6 +25,7 @@ import {
   type Deposit,
   type Expense,
   type Member,
+  type Move,
   type MoveType,
   type NotificationKind,
   type PayId,
@@ -37,7 +38,37 @@ import {
   type ShopIdentity,
   type Variant,
 } from '../data/dashboard';
+import { isAuthLive } from './auth';
+import {
+  applyRemoteStockMove,
+  loadCatalog,
+  replaceCategoryAttributes,
+  setProductStatus,
+  upsertCategory,
+  upsertProduct,
+  type CatalogResult,
+} from './catalog';
 import { takeDemoSetup } from './demo-setup';
+
+/** Shop id on Supabase while the catalogue is live; null in demo mode. */
+let remoteShopId: string | null = null;
+
+export const remoteShopIdOf = () => remoteShopId;
+
+/** Replaces categories, products and stock moves with the account's Supabase catalogue. */
+export async function hydrateCatalog(): Promise<CatalogResult<true> | { ok: true; value: true }> {
+  if (!isAuthLive) return { ok: true, value: true };
+  const result = await loadCatalog();
+  if (!result.ok) return result;
+  remoteShopId = result.value.shopId;
+  setDemo((demo) => ({
+    ...demo,
+    categories: result.value.categories,
+    products: result.value.products,
+    moves: result.value.moves,
+  }));
+  return { ok: true, value: true };
+}
 
 /*
  * One shared store for every island of the merchant space. It starts from the seed (so the
@@ -91,6 +122,9 @@ const getSnapshot = () => {
 const getServerSnapshot = () => seed;
 
 export const useDemo = () => useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+/** Current store snapshot outside of React (catalogue writes, stock RPCs). */
+export const peekDemo = () => getSnapshot();
 
 export function setDemo(update: (current: DemoState) => DemoState) {
   load();
@@ -323,11 +357,11 @@ const shiftStock = (products: Product[], deltas: Record<string, number>) =>
   products.map((product) =>
     product.variants.some((variant) => deltas[variant.id])
       ? {
-          ...product,
-          variants: product.variants.map((variant) =>
-            deltas[variant.id] ? { ...variant, stock: Math.max(0, variant.stock + deltas[variant.id]) } : variant,
-          ),
-        }
+        ...product,
+        variants: product.variants.map((variant) =>
+          deltas[variant.id] ? { ...variant, stock: Math.max(0, variant.stock + deltas[variant.id]) } : variant,
+        ),
+      }
       : product,
   );
 
@@ -424,9 +458,9 @@ export function returnItems(id: string, quantities: Record<string, number>, user
       sales: demo.sales.map((item) =>
         item.id === id
           ? {
-              ...item,
-              lines: item.lines.map((line) => ({ ...line, returned: line.returned + (quantities[line.vid] ?? 0) })),
-            }
+            ...item,
+            lines: item.lines.map((line) => ({ ...line, returned: line.returned + (quantities[line.vid] ?? 0) })),
+          }
           : item,
       ),
       products: shiftStock(demo.products, quantities),
@@ -448,24 +482,53 @@ export function returnItems(id: string, quantities: Record<string, number>, user
   });
 }
 
-export function adjustStock(vid: string, delta: number, type: MoveType, note: string, user: string) {
-  setDemo((demo) => {
-    const item = flatItems(demo, { activeOnly: false }).find((entry) => entry.variant.id === vid)!;
-    const at = nextTime(demo);
-    const party =
-      type === 'return' ? { source: 'Client' } : type === 'loss' ? { destination: 'Casse ou perte' } : undefined;
-    return {
-      ...demo,
-      products: shiftStock(demo.products, { [vid]: delta }),
-      moves: [{ id: `m${at}`, at, type, item: item.full, qty: delta, user, note, ...party }, ...demo.moves],
+export async function adjustStock(vid: string, delta: number, type: MoveType, note: string, user: string) {
+  const demo = getSnapshot();
+  const item = flatItems(demo, { activeOnly: false }).find((entry) => entry.variant.id === vid);
+  if (!item || delta === 0) return;
+  const party =
+    type === 'return' ? { source: 'Client' } : type === 'loss' ? { destination: 'Casse ou perte' } : undefined;
+
+  if (remoteShopId) {
+    const result = await applyRemoteStockMove({
+      shopId: remoteShopId,
+      variantId: vid,
+      type,
+      qty: delta,
+      itemLabel: item.full,
+      source: party && 'source' in party ? party.source : undefined,
+      destination: party && 'destination' in party ? party.destination : undefined,
+      note,
+      userName: user,
+      movedAt: new Date(),
+    });
+    if (!result.ok) return result;
+    setDemo((current) => ({
+      ...current,
+      products: shiftStock(current.products, { [vid]: delta }),
+      moves: [result.value, ...current.moves],
       activity: withActivity(
-        demo,
+        current,
         user,
         `a ${delta > 0 ? 'ajouté' : 'retiré'} ${Math.abs(delta)} × ${item.product.name}`,
         'stock',
       ),
-    };
-  });
+    }));
+    return result;
+  }
+
+  const at = nextTime(demo);
+  setDemo((current) => ({
+    ...current,
+    products: shiftStock(current.products, { [vid]: delta }),
+    moves: [{ id: `m${at}`, at, type, item: item.full, qty: delta, user, note, ...party }, ...current.moves],
+    activity: withActivity(
+      current,
+      user,
+      `a ${delta > 0 ? 'ajouté' : 'retiré'} ${Math.abs(delta)} × ${item.product.name}`,
+      'stock',
+    ),
+  }));
 }
 
 export type MoveInput = {
@@ -482,32 +545,71 @@ export type MoveInput = {
 };
 
 /** A manual entry or exit; back-dated moves are filed at their date in the history. */
-export function recordMove(input: MoveInput) {
-  setDemo((demo) => {
-    const item = flatItems(demo, { activeOnly: false }).find((entry) => entry.variant.id === input.vid)!;
-    const now = nextTime(demo);
-    const at = input.at ?? now;
-    const entry = input.direction === 'in';
-    const qty = entry ? input.qty : -Math.min(input.qty, item.variant.stock);
-    const move = {
-      id: `m${now}`,
-      at,
+export async function recordMove(input: MoveInput) {
+  const demo = getSnapshot();
+  const item = flatItems(demo, { activeOnly: false }).find((entry) => entry.variant.id === input.vid);
+  if (!item) return;
+  const entry = input.direction === 'in';
+  const qty = entry ? input.qty : -Math.min(input.qty, item.variant.stock);
+  if (qty === 0) return;
+
+  if (remoteShopId) {
+    const result = await applyRemoteStockMove({
+      shopId: remoteShopId,
+      variantId: input.vid,
       type: input.type,
-      item: item.full,
       qty,
-      user: input.user,
+      itemLabel: item.full,
+      source: entry ? input.party : undefined,
+      destination: entry ? undefined : input.party,
       note: input.note.trim(),
-      ...(entry ? { source: input.party } : { destination: input.party }),
-    };
-    const index = demo.moves.findIndex((other) => other.at <= at);
-    const moves = [...demo.moves];
+      userName: input.user,
+      movedAt: input.at ? new Date(input.at) : new Date(),
+    });
+    if (!result.ok) return result;
+    setDemo((current) => {
+      const index = current.moves.findIndex((other) => other.at <= result.value.at);
+      const moves = [...current.moves];
+      moves.splice(index === -1 ? moves.length : index, 0, result.value);
+      return {
+        ...current,
+        products: shiftStock(current.products, { [input.vid]: qty }),
+        moves,
+        activity: withActivity(
+          current,
+          input.user,
+          entry
+            ? `a enregistré l’entrée de ${input.qty} × ${item.product.name} (provenance : ${input.party})`
+            : `a enregistré la sortie de ${Math.abs(qty)} × ${item.product.name} (${input.party})`,
+          'stock',
+        ),
+      };
+    });
+    return result;
+  }
+
+  const now = nextTime(demo);
+  const at = input.at ?? now;
+  const move = {
+    id: `m${now}`,
+    at,
+    type: input.type,
+    item: item.full,
+    qty,
+    user: input.user,
+    note: input.note.trim(),
+    ...(entry ? { source: input.party } : { destination: input.party }),
+  };
+  setDemo((current) => {
+    const index = current.moves.findIndex((other) => other.at <= at);
+    const moves = [...current.moves];
     moves.splice(index === -1 ? moves.length : index, 0, move);
     return {
-      ...demo,
-      products: shiftStock(demo.products, { [input.vid]: qty }),
+      ...current,
+      products: shiftStock(current.products, { [input.vid]: qty }),
       moves,
       activity: withActivity(
-        demo,
+        current,
         input.user,
         entry
           ? `a enregistré l’entrée de ${input.qty} × ${item.product.name} (provenance : ${input.party})`
@@ -518,34 +620,101 @@ export function recordMove(input: MoveInput) {
   });
 }
 
-export function applyInventory(counts: Record<string, number>, user: string) {
+export async function applyInventory(counts: Record<string, number>, user: string) {
+  const demo = getSnapshot();
+  const items = flatItems(demo, { activeOnly: false });
+  const deltas: { item: (typeof items)[number]; qty: number }[] = [];
+  for (const item of items) {
+    const counted = counts[item.variant.id];
+    if (counted === undefined || counted === item.variant.stock) continue;
+    deltas.push({ item, qty: counted - item.variant.stock });
+  }
+  if (!deltas.length) return;
+
+  if (remoteShopId) {
+    const applied: Move[] = [];
+    for (const { item, qty } of deltas) {
+      const result = await applyRemoteStockMove({
+        shopId: remoteShopId,
+        variantId: item.variant.id,
+        type: 'inventory',
+        qty,
+        itemLabel: item.full,
+        note: 'Écart d’inventaire',
+        userName: user,
+        movedAt: new Date(),
+      });
+      if (!result.ok) return result;
+      applied.push(result.value);
+    }
+    const stockDeltas = Object.fromEntries(deltas.map(({ item, qty }) => [item.variant.id, qty]));
+    setDemo((current) => ({
+      ...current,
+      products: shiftStock(current.products, stockDeltas),
+      moves: [...applied, ...current.moves],
+      activity: withActivity(current, user, `a validé un inventaire (${applied.length} écart(s))`, 'stock'),
+    }));
+    return;
+  }
+
+  const at = nextTime(demo);
+  const stockDeltas = Object.fromEntries(deltas.map(({ item, qty }) => [item.variant.id, qty]));
+  const moves = deltas.map(({ item, qty }, index) => ({
+    id: `m${at}${index}`,
+    at,
+    type: 'inventory' as const,
+    item: item.full,
+    qty,
+    user,
+    note: 'Écart d’inventaire',
+  }));
+  setDemo((current) => ({
+    ...current,
+    products: shiftStock(current.products, stockDeltas),
+    moves: [...moves, ...current.moves],
+    activity: withActivity(current, user, `a validé un inventaire (${moves.length} écart(s))`, 'stock'),
+  }));
+}
+
+/** Persists a category (and its attributes) when Supabase is live, then updates the shared store. */
+export async function saveCategory(category: Category, sortOrder = 0) {
+  const result = await upsertCategory(category, sortOrder);
+  if (!result.ok) return result;
+  const attrs = await replaceCategoryAttributes(category.id, category.attrs);
+  if (!attrs.ok) return attrs;
   setDemo((demo) => {
-    const items = flatItems(demo, { activeOnly: false });
-    const at = nextTime(demo);
-    const deltas: Record<string, number> = {};
-    const moves = items.flatMap((item, index) => {
-      const counted = counts[item.variant.id];
-      if (counted === undefined || counted === item.variant.stock) return [];
-      deltas[item.variant.id] = counted - item.variant.stock;
-      return [
-        {
-          id: `m${at}${index}`,
-          at,
-          type: 'inventory' as const,
-          item: item.full,
-          qty: counted - item.variant.stock,
-          user,
-          note: 'Écart d’inventaire',
-        },
-      ];
-    });
+    const exists = demo.categories.some((item) => item.id === category.id);
     return {
       ...demo,
-      products: shiftStock(demo.products, deltas),
-      moves: [...moves, ...demo.moves],
-      activity: withActivity(demo, user, `a validé un inventaire (${moves.length} écart(s))`, 'stock'),
+      categories: exists
+        ? demo.categories.map((item) => (item.id === category.id ? category : item))
+        : [...demo.categories, category],
     };
   });
+  return result;
+}
+
+/** Persists a product and its variants when Supabase is live, then updates the shared store. */
+export async function saveProduct(product: Product, editing: boolean) {
+  const result = await upsertProduct(product);
+  if (!result.ok) return result;
+  setDemo((current) => ({
+    ...current,
+    products: editing
+      ? current.products.map((item) => (item.id === product.id ? product : item))
+      : [product, ...current.products],
+  }));
+  return result;
+}
+
+export async function saveProductStatus(product: Product, status: Product['status']) {
+  const result = await setProductStatus(product.id, status);
+  if (!result.ok) return result;
+  setDemo((current) => ({
+    ...current,
+    products: current.products.map((item) => (item.id === product.id ? { ...item, status } : item)),
+  }));
+  return result;
 }
 
 export function receiveGoods(
@@ -667,9 +836,8 @@ export function declareDeposit(input: DepositInput, manager: string): Deposit {
           id: `n-${deposit.id}`,
           kind: 'deposit',
           title: `Versement à vérifier : ${input.shop}`,
-          body: `${manager} a remis ${formatFcfa(input.deposited)} (${input.method}) pour le ${formatLongDay(input.day).toLowerCase()}${
-            gap < 0 ? `. Il manque ${formatFcfa(-gap)}.` : gap > 0 ? `, ${formatFcfa(gap)} de plus que prévu.` : '.'
-          }`,
+          body: `${manager} a remis ${formatFcfa(input.deposited)} (${input.method}) pour le ${formatLongDay(input.day).toLowerCase()}${gap < 0 ? `. Il manque ${formatFcfa(-gap)}.` : gap > 0 ? `, ${formatFcfa(gap)} de plus que prévu.` : '.'
+            }`,
           at,
           read: false,
           href: '/app/versements',
@@ -782,8 +950,8 @@ export function restoreExpense(expense: Expense) {
     demo.expenses.some((item) => item.id === expense.id)
       ? demo
       : {
-          ...demo,
-          expenses: [...demo.expenses, expense].sort((a, b) => b.day - a.day || b.recordedAt - a.recordedAt),
-        },
+        ...demo,
+        expenses: [...demo.expenses, expense].sort((a, b) => b.day - a.day || b.recordedAt - a.recordedAt),
+      },
   );
 }

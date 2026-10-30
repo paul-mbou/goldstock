@@ -39,16 +39,21 @@ const current = Astro.url.pathname.replace(/\/+$/, '') || '/';
     <script>
       import { site } from '../data/site';
       import { getAuthState } from '../lib/auth';
-      import { setDemo } from '../lib/demo';
+      import { hydrateCatalog, setDemo } from '../lib/demo';
       import { fetchShop } from '../lib/shop';
 
       if (document.documentElement.hasAttribute('data-auth-pending')) {
         getAuthState().then(async (state) => {
           if (state.status !== 'granted') return window.location.replace(site.loginUrl);
           document.documentElement.removeAttribute('data-auth-pending');
-          // The logo may have been changed on another device.
-          const shop = await fetchShop();
-          if (shop) setDemo((demo) => ({ ...demo, settings: { ...demo.settings, logoUrl: shop.logoUrl } }));
+          // The logo may have been changed on another device; the catalogue comes from Supabase.
+          const [shop] = await Promise.all([fetchShop(), hydrateCatalog()]);
+          if (shop) {
+            setDemo((demo) => ({
+              ...demo,
+              settings: { ...demo.settings, shopName: shop.name, city: shop.city, logoUrl: shop.logoUrl },
+            }));
+          }
         });
       }
     </script>

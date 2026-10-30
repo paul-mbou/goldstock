@@ -9,7 +9,7 @@ import {
   type Product,
   type ProductStatus,
 } from '../../data/dashboard';
-import { logActivity, marginRate, setDemo, useSession } from '../../lib/demo';
+import { logActivity, marginRate, saveProduct, useSession } from '../../lib/demo';
 import { Screen } from './Screen';
 import { Card, CategoryTile, FormField, SelectBox, Switch, inputClass, textareaClass, useQueryParam } from './ui';
 
@@ -110,7 +110,7 @@ function ProductForm() {
       return;
     }
 
-    const id = editing?.id ?? `p${Date.now().toString(36)}`;
+    const id = editing?.id ?? crypto.randomUUID();
     const baseCost = toNumber(cost);
     const variants = editing
       ? editing.variants.map((variant) => ({
@@ -119,10 +119,10 @@ function ProductForm() {
           cost: toNumber(edits[variant.id]?.cost ?? '') || variant.cost,
         }))
       : combos.length
-        ? combos.map((combo, index) => {
+        ? combos.map((combo) => {
             const row = rows[combo.join(' · ')];
             return {
-              id: `${id}v${index}`,
+              id: crypto.randomUUID(),
               sku: skuOf(combo),
               label: combo.join(' · '),
               price: toNumber(row?.price ?? '') || toNumber(price),
@@ -130,7 +130,16 @@ function ProductForm() {
               stock: toNumber(row?.stock ?? ''),
             };
           })
-        : [{ id: `${id}v0`, sku: skuBase, label: '', price: toNumber(price), cost: baseCost, stock: toNumber(stock) }];
+        : [
+            {
+              id: crypto.randomUUID(),
+              sku: skuBase,
+              label: '',
+              price: toNumber(price),
+              cost: baseCost,
+              stock: toNumber(stock),
+            },
+          ];
 
     const saved: Product = {
       id,
@@ -144,14 +153,11 @@ function ProductForm() {
       variants,
       created: editing?.created ?? TODAY_START,
     };
-    setDemo((current) => ({
-      ...current,
-      products: editing
-        ? current.products.map((item) => (item.id === id ? saved : item))
-        : [saved, ...current.products],
-    }));
-    logActivity(member.name, `a ${editing ? 'modifié' : 'ajouté'} le produit ${saved.name}`, 'edit');
-    window.location.href = `/app/produits?enregistre=${id}`;
+    void saveProduct(saved, Boolean(editing)).then((result) => {
+      if (result && 'ok' in result && result.ok === false) return;
+      logActivity(member.name, `a ${editing ? 'modifié' : 'ajouté'} le produit ${saved.name}`, 'edit');
+      window.location.href = `/app/produits?enregistre=${id}`;
+    });
   };
 
   if (!role.editCatalog) {

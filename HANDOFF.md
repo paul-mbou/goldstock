@@ -5,7 +5,7 @@
 
 ## Goal of current work
 
-Real signup and login on Supabase. Until a sending domain exists, the emailed sign-in code is paused and signup requires an email confirmation link instead (ADR 0005). The merchant space still runs in the browser store, but now **starts empty** with a guided tour.
+Connect the merchant dashboard to Supabase in batches of 3 features + tests. Batch 1 (ADR 0006): **categories, products, stock moves**. Auth stays as ADR 0004/0005.
 
 ## Done since last handoff
 
@@ -33,9 +33,9 @@ Real signup and login on Supabase. Until a sending domain exists, the emailed si
 
 ## In progress
 
-- Mobile check (360 and 320 px, every `/app` screen with sample data, light and dark, sheets and menu): no horizontal scroll left. Responsive grids now always start with `grid-cols-1` (an implicit `auto` column grows to the longest text and breaks `truncate`); the screen-reader table of `SalesChart` sits in an `sr-only` wrapper (a table ignores the 1px width).
-- Owner to do in Supabase: keep « Confirm email » **on**; URL Configuration (Site URL + `http://localhost:*/confirmer-email` + production `/confirmer-email` in Redirect URLs); paste `supabase/templates/confirm-signup.html` into the Confirm signup template; delete test users `test-agent-goldstock@mailinator.com` (and `…2@gmail.com` if it exists). Then test signup → link → `/app` with a Supabase team member's address.
-- Live test still to do with a confirmed account: change password (wrong current password, then success), upload / replace / remove the logo, reload `/app` on another browser to see it.
+- **Batch 1 catalogue (uncommitted until owner asks):** migration `20261030100000_merchant_catalog.sql`, `src/lib/catalog/`, hydrate in `AppLayout`, writes via `saveCategory` / `saveProduct` / `recordMove`. Vitest: `npm test`. Owner must **apply the migration** on project `snwlfrnlcamxyaqvqyye` (SQL Editor or `supabase db push`) before live catalogue works; until then demo mode / empty hydrate fails softly.
+- Next batches (proposal): 2) ventes + caisse + reçus ; 3) fournisseurs + réceptions + dépenses ; 4) équipe + versements + notifications.
+- Owner still: Confirm email on, Secure password change, Redirect URLs, email template, Vercel env vars + redeploy.
 
 ## Do not touch
 
@@ -52,6 +52,7 @@ Real signup and login on Supabase. Until a sending domain exists, the emailed si
 ## How to validate
 
 ```bash
+npm test
 npm run check
 npm run build
 npx prettier --check .

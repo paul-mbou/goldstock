@@ -10,7 +10,7 @@ import {
   type Product,
   type Tone,
 } from '../../data/dashboard';
-import { logActivity, setDemo, useSession } from '../../lib/demo';
+import { logActivity, peekDemo, saveCategory, useSession } from '../../lib/demo';
 import { Screen } from './Screen';
 import {
   Badge,
@@ -38,11 +38,10 @@ export default function CategoriesPage() {
 const withOptions: AttrType[] = ['list', 'multi', 'color'];
 const canVary: AttrType[] = ['list', 'color'];
 
-function updateCategory(id: string, patch: (category: Category) => Category) {
-  setDemo((demo) => ({
-    ...demo,
-    categories: demo.categories.map((category) => (category.id === id ? patch(category) : category)),
-  }));
+async function updateCategory(id: string, patch: (category: Category) => Category) {
+  const category = peekDemo().categories.find((item) => item.id === id);
+  if (!category) return;
+  await saveCategory(patch(category));
 }
 
 function Categories() {
@@ -110,19 +109,26 @@ function Categories() {
               category={selected}
               editable={editable}
               onRename={(name) => {
-                updateCategory(selected.id, (category) => ({ ...category, name }));
-                notify(`Catégorie renommée en « ${name} ».`);
+                void updateCategory(selected.id, (category) => ({ ...category, name })).then(() =>
+                  notify(`Catégorie renommée en « ${name} ».`),
+                );
               }}
               onArchive={() => {
-                updateCategory(selected.id, (category) => ({ ...category, archived: !category.archived }));
-                logActivity(
-                  member.name,
-                  `a ${selected.archived ? 'restauré' : 'archivé'} la catégorie ${selected.name}`,
-                  'edit',
-                );
-                notify(
-                  selected.archived ? `${selected.name} est de nouveau disponible.` : `${selected.name} est archivée.`,
-                );
+                void updateCategory(selected.id, (category) => ({
+                  ...category,
+                  archived: !category.archived,
+                })).then(() => {
+                  logActivity(
+                    member.name,
+                    `a ${selected.archived ? 'restauré' : 'archivé'} la catégorie ${selected.name}`,
+                    'edit',
+                  );
+                  notify(
+                    selected.archived
+                      ? `${selected.name} est de nouveau disponible.`
+                      : `${selected.name} est archivée.`,
+                  );
+                });
               }}
             />
             <Attributes category={selected} editable={editable} onNotify={notify} />
@@ -134,11 +140,12 @@ function Categories() {
         open={creating}
         onClose={() => setCreating(false)}
         onCreate={(category) => {
-          setDemo((demo) => ({ ...demo, categories: [...demo.categories, category] }));
-          logActivity(member.name, `a créé la catégorie ${category.name}`, 'edit');
-          setSelectedId(category.id);
-          setCreating(false);
-          notify(`Catégorie « ${category.name} » créée. Ajoutez-lui ses caractéristiques.`);
+          void saveCategory(category, peekDemo().categories.length).then(() => {
+            logActivity(member.name, `a créé la catégorie ${category.name}`, 'edit');
+            setSelectedId(category.id);
+            setCreating(false);
+            notify(`Catégorie « ${category.name} » créée. Ajoutez-lui ses caractéristiques.`);
+          });
         }}
       />
       {region}
@@ -166,7 +173,7 @@ function CategoryHeader({
     event.preventDefault();
     const value = sub.trim();
     if (!value || category.subs.includes(value)) return;
-    updateCategory(category.id, (item) => ({ ...item, subs: [...item.subs, value] }));
+    void updateCategory(category.id, (item) => ({ ...item, subs: [...item.subs, value] }));
     setSub('');
   };
 
@@ -235,7 +242,7 @@ function CategoryHeader({
                   type="button"
                   aria-label={`Retirer ${item}`}
                   onClick={() =>
-                    updateCategory(category.id, (current) => ({
+                    void updateCategory(category.id, (current) => ({
                       ...current,
                       subs: current.subs.filter((value) => value !== item),
                     }))
@@ -356,9 +363,9 @@ function Attributes({
       document.getElementById(`attr-new-${result.error.field}`)?.focus();
       return;
     }
-    updateCategory(category.id, (current) => ({
+    void updateCategory(category.id, (current) => ({
       ...current,
-      attrs: [...current.attrs, { id: `${current.id}_${Date.now().toString(36)}`, ...result.fields }],
+      attrs: [...current.attrs, { id: crypto.randomUUID(), ...result.fields }],
     }));
     onNotify(`« ${result.fields.name} » ajoutée à ${category.name}.`);
     setDraft(emptyDraft);
@@ -367,7 +374,7 @@ function Attributes({
 
   const remove = (attribute: Attribute) => {
     const index = category.attrs.findIndex((item) => item.id === attribute.id);
-    updateCategory(category.id, (current) => ({
+    void updateCategory(category.id, (current) => ({
       ...current,
       attrs: current.attrs.filter((item) => item.id !== attribute.id),
     }));
@@ -375,7 +382,7 @@ function Attributes({
       action: {
         label: 'Annuler',
         run: () =>
-          updateCategory(category.id, (current) => {
+          void updateCategory(category.id, (current) => {
             if (current.attrs.some((item) => item.id === attribute.id)) return current;
             const attrs = [...current.attrs];
             attrs.splice(index, 0, attribute);
@@ -630,7 +637,7 @@ function EditAttributeDialog({
       document.getElementById(`attr-edit-${result.error.field}`)?.focus();
       return;
     }
-    updateCategory(category.id, (current) => ({
+    void updateCategory(category.id, (current) => ({
       ...current,
       attrs: current.attrs.map((item) => (item.id === attribute.id ? { ...item, ...result.fields } : item)),
     }));
@@ -732,7 +739,7 @@ function NewCategoryDialog({
     event.preventDefault();
     if (name.trim().length < 2) return setError('Donnez un nom à la catégorie.');
     onCreate({
-      id: `c${Date.now().toString(36)}`,
+      id: crypto.randomUUID(),
       name: name.trim(),
       code: code || 'CAT',
       icon,

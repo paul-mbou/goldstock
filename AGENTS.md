@@ -99,7 +99,8 @@ Astro documentation: https://docs.astro.build. Consult these guides before worki
 
 ## Out of scope for agents
 
-- Real payments, and moving merchant-space data to Supabase, unless the owner asks (only auth, the shop row and its logo are on Supabase today).
+- Real payments, unless the owner asks.
+- Moving merchant-space data to Supabase beyond the batches the owner requested (ADR 0006: catalogue = categories, products, stock; later batches for sales, suppliers, team…).
 - Changing Supabase dashboard settings, secrets or production data.
 - Changing prices, plans, support phone or WhatsApp number in `src/data/site.ts` without the owner asking.
 - Changing the Vercel project or production environment variables.

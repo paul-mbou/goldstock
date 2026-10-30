@@ -1,7 +1,7 @@
 import { Archive, ArchiveRestore, Package, PackageSearch, Pencil, Plus, Tags } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { formatFcfa, formatNumber, type Product, type ProductStatus } from '../../data/dashboard';
-import { logActivity, priceRange, productStock, setDemo, stockStatus, useSession } from '../../lib/demo';
+import { logActivity, priceRange, productStock, saveProductStatus, stockStatus, useSession } from '../../lib/demo';
 import { Screen } from './Screen';
 import { normalize } from './Topbar';
 import {
@@ -71,10 +71,7 @@ function Products() {
   });
 
   const setStatusOf = (product: Product, next: ProductStatus) => {
-    setDemo((current) => ({
-      ...current,
-      products: current.products.map((item) => (item.id === product.id ? { ...item, status: next } : item)),
-    }));
+    void saveProductStatus(product, next);
   };
 
   const archive = (product: Product) => {

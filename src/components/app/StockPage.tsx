@@ -151,9 +151,10 @@ function Stock() {
           <Inventory
             items={items}
             onApply={(counts, gaps) => {
-              applyInventory(counts, session.member.name);
-              setView('moves');
-              notify(gaps ? `Inventaire validé : ${gaps} écart(s) corrigé(s).` : 'Inventaire validé, aucun écart.');
+              void applyInventory(counts, session.member.name).then(() => {
+                setView('moves');
+                notify(gaps ? `Inventaire validé : ${gaps} écart(s) corrigé(s).` : 'Inventaire validé, aucun écart.');
+              });
             }}
           />
         )}
@@ -163,9 +164,10 @@ function Stock() {
         item={adjusting}
         onClose={() => setAdjusting(null)}
         onConfirm={(item, delta, type, note) => {
-          adjustStock(item.variant.id, delta, type, note, session.member.name);
-          setAdjusting(null);
-          notify(`${item.full} : ${delta > 0 ? '+' : ''}${delta} (${MOVE_LABELS[type].toLowerCase()}).`);
+          void adjustStock(item.variant.id, delta, type, note, session.member.name).then(() => {
+            setAdjusting(null);
+            notify(`${item.full} : ${delta > 0 ? '+' : ''}${delta} (${MOVE_LABELS[type].toLowerCase()}).`);
+          });
         }}
       />
       {moveSheet.value && (
@@ -176,14 +178,15 @@ function Stock() {
           items={items}
           onClose={moveSheet.hide}
           onSave={(input, item) => {
-            recordMove(input);
-            moveSheet.hide();
-            setView('moves');
-            notify(
-              input.direction === 'in'
-                ? `Entrée enregistrée : +${input.qty} ${item.full}.`
-                : `Sortie enregistrée : −${input.qty} ${item.full}.`,
-            );
+            void recordMove(input).then(() => {
+              moveSheet.hide();
+              setView('moves');
+              notify(
+                input.direction === 'in'
+                  ? `Entrée enregistrée : +${input.qty} ${item.full}.`
+                  : `Sortie enregistrée : −${input.qty} ${item.full}.`,
+              );
+            });
           }}
         />
       )}
@@ -449,9 +452,8 @@ function Moves({ moves }: { moves: Move[] }) {
           {visible.map((move) => (
             <li key={move.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3.5 sm:px-5">
               <span
-                className={`w-12 text-right text-base font-extrabold tabular-nums ${
-                  move.qty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-                }`}
+                className={`w-12 text-right text-base font-extrabold tabular-nums ${move.qty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+                  }`}
               >
                 {move.qty > 0 ? '+' : ''}
                 {move.qty}
@@ -527,13 +529,12 @@ function Inventory({
                 onChange={(next) => setCounts((current) => ({ ...current, [item.variant.id]: next }))}
               />
               <span
-                className={`w-12 text-right text-sm font-bold tabular-nums ${
-                  gap === 0
+                className={`w-12 text-right text-sm font-bold tabular-nums ${gap === 0
                     ? 'text-ink-mute'
                     : gap > 0
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-red-600 dark:text-red-400'
-                }`}
+                  }`}
               >
                 {gap === 0 ? '—' : `${gap > 0 ? '+' : ''}${gap}`}
               </span>

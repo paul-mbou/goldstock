@@ -15,7 +15,13 @@ const MAX_SOURCE_BYTES = 10 * 1024 * 1024;
 
 export const LOGO_ACCEPT = LOGO_TYPES.join(',');
 
-export type AccountShop = { name: string; business: BusinessId; city: string; logoUrl: string };
+export type AccountShop = {
+  id: string;
+  name: string;
+  business: BusinessId;
+  city: string;
+  logoUrl: string;
+};
 
 const logoUrlOf = (path: string | null) =>
   path ? getSupabase().storage.from(LOGO_BUCKET).getPublicUrl(path).data.publicUrl : '';
@@ -26,7 +32,13 @@ const firstShop = () =>
 export async function fetchShop(): Promise<AccountShop | null> {
   const { data } = await firstShop();
   if (!data || !isBusinessId(data.business)) return null;
-  return { name: data.name, business: data.business, city: data.city, logoUrl: logoUrlOf(data.logo_path) };
+  return {
+    id: data.id,
+    name: data.name,
+    business: data.business,
+    city: data.city,
+    logoUrl: logoUrlOf(data.logo_path),
+  };
 }
 
 export type AccountOwner = { fullName: string; phone: string };

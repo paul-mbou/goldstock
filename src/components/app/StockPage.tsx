@@ -452,8 +452,9 @@ function Moves({ moves }: { moves: Move[] }) {
           {visible.map((move) => (
             <li key={move.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3.5 sm:px-5">
               <span
-                className={`w-12 text-right text-base font-extrabold tabular-nums ${move.qty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-                  }`}
+                className={`w-12 text-right text-base font-extrabold tabular-nums ${
+                  move.qty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+                }`}
               >
                 {move.qty > 0 ? '+' : ''}
                 {move.qty}
@@ -529,12 +530,13 @@ function Inventory({
                 onChange={(next) => setCounts((current) => ({ ...current, [item.variant.id]: next }))}
               />
               <span
-                className={`w-12 text-right text-sm font-bold tabular-nums ${gap === 0
+                className={`w-12 text-right text-sm font-bold tabular-nums ${
+                  gap === 0
                     ? 'text-ink-mute'
                     : gap > 0
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-red-600 dark:text-red-400'
-                  }`}
+                }`}
               >
                 {gap === 0 ? '—' : `${gap > 0 ? '+' : ''}${gap}`}
               </span>

@@ -7,7 +7,6 @@ export {
   saleUuidOf,
   setRemoteSaleCancelled,
   type SalesError,
-  type SalesResult
+  type SalesResult,
 } from './api';
 export { nextSaleCode, type SaleDraft } from './types';
-

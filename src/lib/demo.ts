@@ -404,11 +404,11 @@ const shiftStock = (products: Product[], deltas: Record<string, number>) =>
   products.map((product) =>
     product.variants.some((variant) => deltas[variant.id])
       ? {
-        ...product,
-        variants: product.variants.map((variant) =>
-          deltas[variant.id] ? { ...variant, stock: Math.max(0, variant.stock + deltas[variant.id]) } : variant,
-        ),
-      }
+          ...product,
+          variants: product.variants.map((variant) =>
+            deltas[variant.id] ? { ...variant, stock: Math.max(0, variant.stock + deltas[variant.id]) } : variant,
+          ),
+        }
       : product,
   );
 
@@ -587,12 +587,12 @@ export async function returnItems(
       sales: demo.sales.map((item) =>
         item.id === id
           ? {
-            ...item,
-            lines: item.lines.map((line) => ({
-              ...line,
-              returned: line.returned + (quantities[line.vid] ?? 0),
-            })),
-          }
+              ...item,
+              lines: item.lines.map((line) => ({
+                ...line,
+                returned: line.returned + (quantities[line.vid] ?? 0),
+              })),
+            }
           : item,
       ),
       products: shiftStock(demo.products, quantities),
@@ -912,15 +912,14 @@ export async function receiveGoods(
     const at = reception.at;
     setDemo((current) => ({
       ...current,
-      products: shiftStock(
-        current.products,
-        Object.fromEntries(input.lines.map((line) => [line.vid, line.qty])),
-      ).map((product) => ({
-        ...product,
-        variants: product.variants.map((variant) =>
-          costs[variant.id] ? { ...variant, cost: costs[variant.id] } : variant,
-        ),
-      })),
+      products: shiftStock(current.products, Object.fromEntries(input.lines.map((line) => [line.vid, line.qty]))).map(
+        (product) => ({
+          ...product,
+          variants: product.variants.map((variant) =>
+            costs[variant.id] ? { ...variant, cost: costs[variant.id] } : variant,
+          ),
+        }),
+      ),
       receptions: [reception, ...current.receptions],
       suppliers: current.suppliers.map((item) =>
         item.id === supplier.id ? { ...item, total: item.total + total } : item,
@@ -1036,8 +1035,9 @@ export type DepositInput = Pick<Deposit, 'shop' | 'day' | 'deposited' | 'method'
 
 const depositNoticeBody = (input: DepositInput, manager: string, expected: number) => {
   const gap = input.deposited - expected;
-  return `${manager} a remis ${formatFcfa(input.deposited)} (${input.method}) pour le ${formatLongDay(input.day).toLowerCase()}${gap < 0 ? `. Il manque ${formatFcfa(-gap)}.` : gap > 0 ? `, ${formatFcfa(gap)} de plus que prévu.` : '.'
-    }`;
+  return `${manager} a remis ${formatFcfa(input.deposited)} (${input.method}) pour le ${formatLongDay(input.day).toLowerCase()}${
+    gap < 0 ? `. Il manque ${formatFcfa(-gap)}.` : gap > 0 ? `, ${formatFcfa(gap)} de plus que prévu.` : '.'
+  }`;
 };
 
 /** A manager hands the day's cash to the owner: it waits as "à vérifier" and the owner is notified. */
@@ -1301,10 +1301,7 @@ export async function recordExpense(input: ExpenseInput, user: string): Promise<
   return created;
 }
 
-export async function deleteExpense(
-  id: string,
-  user: string,
-): Promise<SupplyResult<true> | { ok: true; value: true }> {
+export async function deleteExpense(id: string, user: string): Promise<SupplyResult<true> | { ok: true; value: true }> {
   const expense = getSnapshot().expenses.find((item) => item.id === id);
   if (!expense) return { ok: true, value: true };
 
@@ -1321,9 +1318,7 @@ export async function deleteExpense(
   return { ok: true, value: true };
 }
 
-export async function restoreExpense(
-  expense: Expense,
-): Promise<SupplyResult<true> | { ok: true; value: true }> {
+export async function restoreExpense(expense: Expense): Promise<SupplyResult<true> | { ok: true; value: true }> {
   if (getSnapshot().expenses.some((item) => item.id === expense.id)) return { ok: true, value: true };
 
   if (remoteShopId) {

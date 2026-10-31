@@ -208,9 +208,9 @@ function ReceptionForm({
       current.some((line) => line.vid === presetItem)
         ? current
         : [
-          ...current,
-          { vid: presetItem, qty: Math.max(1, item.product.min * 2 - item.variant.stock), cost: item.variant.cost },
-        ],
+            ...current,
+            { vid: presetItem, qty: Math.max(1, item.product.min * 2 - item.variant.stock), cost: item.variant.cost },
+          ],
     );
     const match = demo.suppliers.find((supplier) => supplier.category === item.category?.name);
     if (match && !initialSupplier) setSupplierId(match.id);

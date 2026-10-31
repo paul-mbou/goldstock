@@ -2,7 +2,7 @@
 
 ## Purpose
 
-GOLDSTOCK helps Cameroonian shop owners track their products, sales, stock, staff and the cash deposits of their managers, from a computer or a phone. This repo holds the public site (landing page, login, 7-day free trial) and the merchant space (`/app`), which currently runs as a front-end demo until the backend API is live.
+GOLDSTOCK helps Cameroonian shop owners track their products, sales, stock, staff and the cash deposits of their managers, from a computer or a phone. This repo holds the public site (landing page, login, 7-day free trial) and the merchant space (`/app`). With Supabase configured, `/app` hydrates catalogue, sales, supply and staff from the database; without env vars it stays a front-end demo (ADR 0002).
 
 ## Primary users
 
@@ -20,7 +20,7 @@ GOLDSTOCK helps Cameroonian shop owners track their products, sales, stock, staf
 
 - A multi-trade marketplace: a shop has one line of business, fixed at signup.
 - An accounting or payroll suite.
-- A backend: this repo is front end only and talks to an external API.
+- A separate API server: the static Astro site talks to Supabase Auth and Postgres (RLS) from the browser.
 
 ## Brand / UX north star (if UI)
 

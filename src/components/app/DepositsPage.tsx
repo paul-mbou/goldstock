@@ -210,10 +210,11 @@ function Deposits() {
                   >
                     <div className="flex items-center gap-3">
                       <span
-                        className={`grid size-10 shrink-0 place-items-center rounded-xl ${gap < 0
+                        className={`grid size-10 shrink-0 place-items-center rounded-xl ${
+                          gap < 0
                             ? 'bg-red-50 text-red-600 dark:bg-red-400/10 dark:text-red-300'
                             : 'bg-sunken text-ink-soft'
-                          }`}
+                        }`}
                       >
                         {gap < 0 ? (
                           <TriangleAlert className="size-5" aria-hidden="true" />
@@ -355,8 +356,9 @@ function ReviewDialog({
               </div>
             ))}
             <div
-              className={`flex items-center justify-between gap-4 px-4 py-3.5 ${gap < 0 ? 'bg-red-50 dark:bg-red-400/10' : 'bg-emerald-50 dark:bg-emerald-400/10'
-                }`}
+              className={`flex items-center justify-between gap-4 px-4 py-3.5 ${
+                gap < 0 ? 'bg-red-50 dark:bg-red-400/10' : 'bg-emerald-50 dark:bg-emerald-400/10'
+              }`}
             >
               <span className="font-bold text-ink">Écart</span>
               {gap === 0 ? <Badge tone="success">Conforme</Badge> : <Gap value={gap} />}
@@ -441,9 +443,9 @@ function DeclareDialog({
     day === undefined
       ? 0
       : demo.sales.filter(
-        (sale) =>
-          sale.shop === shop && sale.pay === 'cash' && !sale.cancelled && sale.at >= day && sale.at < day + DAY,
-      ).length;
+          (sale) =>
+            sale.shop === shop && sale.pay === 'cash' && !sale.cancelled && sale.at >= day && sale.at < day + DAY,
+        ).length;
   /* Pre-filled with the exact amount until the manager types another one. */
   const amountValue = amount ?? String(expected);
   const deposited = Number(amountValue) || 0;
@@ -559,8 +561,9 @@ function DeclareDialog({
           </div>
           <div
             aria-live="polite"
-            className={`flex items-center justify-between gap-4 px-4 py-3 ${gap < 0 ? 'bg-red-50 dark:bg-red-400/10' : gap > 0 ? 'bg-gold-50 dark:bg-gold-400/10' : 'bg-sunken/60'
-              }`}
+            className={`flex items-center justify-between gap-4 px-4 py-3 ${
+              gap < 0 ? 'bg-red-50 dark:bg-red-400/10' : gap > 0 ? 'bg-gold-50 dark:bg-gold-400/10' : 'bg-sunken/60'
+            }`}
           >
             <span className="font-bold text-ink">Écart</span>
             {gap === 0 ? <Badge tone="success">Conforme</Badge> : <Gap value={gap} />}

@@ -5,7 +5,7 @@ export {
   loadSupply,
   receiveRemoteGoods,
   type SupplyError,
-  type SupplyResult
+  type SupplyResult,
 } from './api';
 export {
   asExpenseCategory,
@@ -15,6 +15,5 @@ export {
   mapExpense,
   mapReception,
   mapSupplier,
-  nextCodedId
+  nextCodedId,
 } from './types';
-

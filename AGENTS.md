@@ -5,16 +5,16 @@
 
 ## Product (one sentence)
 
-GOLDSTOCK is a stock and sales management tool for Cameroonian shops: a static marketing site (landing, login, free trial) plus a merchant space (`/app`) that runs as a front-end demo until the backend exists.
+GOLDSTOCK is a stock and sales management tool for Cameroonian shops: a static marketing site (landing, login, free trial) plus a merchant space (`/app`) that hydrates from Supabase when configured, and falls back to a front-end demo store otherwise.
 
 ## Stack
 
-| Layer                     | Choice                                                                                                                                                                                                                                                                                                    |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Language / framework      | TypeScript (strict), Astro 7 static site with React 19 islands                                                                                                                                                                                                                                            |
-| State / routing / backend | Astro file routing in `src/pages/`; merchant-space state in one shared store (`src/lib/demo.ts`, kept in `sessionStorage`); login and signup on Supabase Auth with an emailed second-factor code (`src/lib/auth.ts`, `supabase/`), optional via `PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_PUBLISHABLE_KEY` |
-| UI / design system        | Tailwind CSS 4 tokens in `src/styles/global.css` (navy + gold brand, dashboard surfaces `canvas` / `panel` / `sunken` / `line` / `ink*`), Plus Jakarta Sans, lucide-react icons                                                                                                                           |
-| Hosting                   | Vercel, production deploy on every push to `main`                                                                                                                                                                                                                                                         |
+| Layer                     | Choice                                                                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language / framework      | TypeScript (strict), Astro 7 static site with React 19 islands                                                                                                                  |
+| State / routing / backend | Astro file routing in `src/pages/`; merchant-space state in one shared store (`src/lib/demo.ts`, kept in `sessionStorage`) hydrated from Supabase (`src/lib/catalog             | sales | supply | staff`); login and signup on Supabase Auth (`src/lib/auth.ts`, `supabase/`), optional via `PUBLIC_SUPABASE_URL`/`PUBLIC_SUPABASE_PUBLISHABLE_KEY`(Vercel also accepts`NEXT_PUBLIC_*` fallbacks) |
+| UI / design system        | Tailwind CSS 4 tokens in `src/styles/global.css` (navy + gold brand, dashboard surfaces `canvas` / `panel` / `sunken` / `line` / `ink*`), Plus Jakarta Sans, lucide-react icons |
+| Hosting                   | Vercel, production deploy on every push to `main`                                                                                                                               |
 
 ## Hard rules (do not violate)
 
@@ -43,9 +43,9 @@ src/
 │   ├── app/          # Merchant-space islands (one *Page.tsx per screen) + ui.tsx primitives
 │   └── brand/        # Logo, flag, WhatsApp icon
 ├── data/             # site.ts, dashboard.ts (seed, roles, permissions), businesses.ts, catalogs.ts
-├── lib/              # auth.ts (Supabase auth + email code + phone helpers), supabase.ts (client), demo.ts (shared store), demo-setup.ts, theme.ts
+├── lib/              # auth, supabase, demo (shared store), catalog/sales/supply/staff (Supabase dual-write), shop, theme
 └── styles/global.css # Tailwind @theme tokens, light/dark surfaces, scroll animations
-supabase/             # migrations/ (profiles, shops, email codes, RLS, shop-logos bucket), functions/email-otp (second factor, Deno)
+supabase/             # migrations/ (auth, catalogue, sales, supply, staff + RLS), functions/email-otp (paused second factor)
 docs/                 # PRODUCT, decisions (ADRs), knowledge, screenshots
 ```
 
@@ -100,7 +100,7 @@ Astro documentation: https://docs.astro.build. Consult these guides before worki
 ## Out of scope for agents
 
 - Real payments, unless the owner asks.
-- Moving merchant-space data to Supabase beyond the batches the owner requested (ADR 0006: catalogue = categories, products, stock; later batches for sales, suppliers, team…).
+- Staff auth accounts, multi-shop as real Supabase rows, or password reset, unless the owner asks (batches 1–4 / ADR 0006–0009 are done).
 - Changing Supabase dashboard settings, secrets or production data.
 - Changing prices, plans, support phone or WhatsApp number in `src/data/site.ts` without the owner asking.
 - Changing the Vercel project or production environment variables.

@@ -5,42 +5,41 @@
 
 ## Goal of current work
 
-Connect the merchant dashboard to Supabase in batches of 3 features + tests. Batch 4 (ADR 0009): **équipe + versements + notifications**. Batches 1–3 on `main` (`448f70d`, `f7de8c9`, `4ebcaeb`).
+Dashboard → Supabase batches 1–4 are **done and on `main`**. Next work only when the owner asks (staff auth, password reset, multi-shop rows, payments…).
 
 ## Done since last handoff
 
-- **Batch 3** pushed (`4ebcaeb`): suppliers / receptions / expenses.
-- **Batch 4 (ready, uncommitted until owner asks):** ADR `0009`; migration `20261031120000_staff.sql` (`shop_members`, `deposits`, `notifications`, RPCs `declare_deposit` / `withdraw_deposit`); `src/lib/staff/`; hydrate + dual-write; Team / Deposits / notifications UI; Vitest mappers. Staff = roster only (no auth accounts yet).
+| Lot | Commit    | Scope                                           |
+| --- | --------- | ----------------------------------------------- |
+| 1   | `448f70d` | Catalogue (ADR 0006)                            |
+| 2   | `f7de8c9` | Ventes / caisse / factures (ADR 0007)           |
+| 3   | `4ebcaeb` | Fournisseurs / réceptions / dépenses (ADR 0008) |
+| 4   | `0ca2f36` | Équipe / versements / notifications (ADR 0009)  |
+
+Shared store still feeds islands; live mode hydrates + dual-writes. Demo mode (no env) unchanged.
 
 ## In progress
 
-- Owner must **apply** catalog + sales + supply + staff migrations on `snwlfrnlcamxyaqvqyye`.
-- Owner still: Confirm email on, Secure password change, Redirect URLs, email template, Vercel env + redeploy.
-- Later: staff auth linked to `auth.users`, multi-shop rows, password reset.
+- Owner: **`npx supabase db push`** (or SQL Editor) for migrations `20261030100000` → `20261031120000` on `snwlfrnlcamxyaqvqyye`.
+- Owner: Vercel `PUBLIC_SUPABASE_*` (or `NEXT_PUBLIC_*`) at build time + redeploy; Confirm email on; Secure password change; Redirect URLs; email template; SMTP/domain when ready for real customers.
 
 ## Do not touch
 
-- `src/data/site.ts` prices, phone and WhatsApp number — reason: owner-controlled business values.
-- `.env.local`, `.vercel/` — reason: local secrets and Vercel link.
+- `src/data/site.ts` prices, phone and WhatsApp number.
+- `.env.local`, `.vercel/`.
 
 ## Blockers / open questions
 
-- No domain: Supabase built-in mailer rate-limits; real customers need SMTP or a domain.
-- Dashboard clock still fixed (`NOW` in `dashboard.ts`).
-- No password reset yet.
+- No sending domain → built-in mailer rate-limits.
+- Fixed dashboard clock (`NOW` in `dashboard.ts`).
+- Invited staff cannot sign in yet (roster only).
 
 ## How to validate
 
 ```bash
-npm test
-npm run check
-npm run build
-npx prettier --check .
+npm test && npm run check && npm run build && npx prettier --check .
 ```
 
 ## Pointers
 
-- Contract: `AGENTS.md`
-- Product: `docs/PRODUCT.md`
-- Knowledge: `docs/knowledge/INDEX.md`
-- Latest staff ADR: `docs/decisions/0009-team-deposits-notifications-on-supabase.md`
+- Contract: `AGENTS.md` · Product: `docs/PRODUCT.md` · ADRs: `docs/decisions/` (0006–0009)

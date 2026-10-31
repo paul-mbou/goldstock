@@ -108,9 +108,9 @@ export function EmailCodeStep({ email, onVerified, onCancel, cancelLabel }: Prop
   const fieldError =
     error === 'invalid-code'
       ? codeMessages['invalid-code'] +
-      (attemptsLeft
-        ? ` ${attemptsLeft} essai${attemptsLeft > 1 ? 's' : ''} restant${attemptsLeft > 1 ? 's' : ''}.`
-        : '')
+        (attemptsLeft
+          ? ` ${attemptsLeft} essai${attemptsLeft > 1 ? 's' : ''} restant${attemptsLeft > 1 ? 's' : ''}.`
+          : '')
       : undefined;
   const alert = error && error !== 'invalid-code' ? codeMessages[error] : null;
 

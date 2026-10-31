@@ -170,10 +170,14 @@ Tant que `PUBLIC_SUPABASE_URL` et `PUBLIC_SUPABASE_PUBLISHABLE_KEY` ne sont pas 
 ### Ce qui est stocké
 
 - `profiles` : nom, email, téléphone facultatif (`+2376XXXXXXXX`).
-- `shops` : nom, activité (non modifiable), ville. Créées automatiquement à l'inscription par un trigger.
-- `email_otp_challenges` et `verified_sessions` : codes hachés et sessions validées, accessibles seulement par l'Edge Function.
+- `shops` : nom, activité (non modifiable), ville, logo. Créées automatiquement à l'inscription par un trigger.
+- `email_otp_challenges` / `verified_sessions` : codes hachés (Edge Function, pause ADR 0005).
+- Catalogue (ADR 0006) : `categories`, `category_attributes`, `products`, `product_variants`, `stock_moves`.
+- Ventes (ADR 0007) : `sales`, `sale_lines`.
+- Approvisionnement (ADR 0008) : `suppliers`, `receptions`, `reception_lines`, `expenses`.
+- Équipe (ADR 0009) : `shop_members`, `deposits`, `notifications` (membres = liste, pas encore de comptes auth).
 
-Toutes les tables ont la RLS activée ; `profiles` et `shops` exigent en plus `second_factor_verified()`, qui signifie aujourd'hui « adresse confirmée » et redeviendra « code email validé » à la fin de la pause.
+Toutes les tables ont la RLS activée ; l’accès métier exige `is_shop_owner` et `second_factor_verified()` (« adresse confirmée » tant que le code email est en pause).
 
 Seuls les composants interactifs sont hydratés (`client:load`, `client:idle`, `client:visible`) ; tout le reste est rendu en HTML statique.
 

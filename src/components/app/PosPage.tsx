@@ -228,8 +228,9 @@ function Pos() {
                         type="button"
                         onClick={() => add(item)}
                         disabled={full}
-                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gold-400 disabled:cursor-not-allowed sm:px-5 ${inCart ? 'bg-gold-50 dark:bg-gold-400/10' : 'enabled:hover:bg-sunken/60'
-                          } ${out ? 'opacity-55' : ''}`}
+                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gold-400 disabled:cursor-not-allowed sm:px-5 ${
+                          inCart ? 'bg-gold-50 dark:bg-gold-400/10' : 'enabled:hover:bg-sunken/60'
+                        } ${out ? 'opacity-55' : ''}`}
                       >
                         <CategoryTile category={item.category} size="sm" />
                         <span className="min-w-0 flex-1">
@@ -243,12 +244,13 @@ function Pos() {
                             {formatFcfa(item.variant.price)}
                           </span>
                           <span
-                            className={`block text-xs font-semibold whitespace-nowrap ${out
+                            className={`block text-xs font-semibold whitespace-nowrap ${
+                              out
                                 ? 'text-red-600 dark:text-red-300'
                                 : low
                                   ? 'text-gold-700 dark:text-gold-300'
                                   : 'text-ink-mute'
-                              }`}
+                            }`}
                           >
                             {out ? 'Rupture' : `${item.variant.stock} dispo.`}
                           </span>

@@ -12,14 +12,14 @@ Lightweight decisions that outlive chat history.
 
 ## Index
 
-| ID   | Title                                                                                             | Status               | Date       |
-| ---- | ------------------------------------------------------------------------------------------------- | -------------------- | ---------- |
-| 0001 | [Static Astro site with React islands](0001-static-astro-with-react-islands.md)                   | Accepted             | 2026-10-23 |
-| 0002 | [Front-end demo mode until the API exists](0002-demo-mode-without-backend.md)                     | Amended by 0004      | 2026-10-23 |
-| 0003 | [One line of business per shop](0003-one-line-of-business-per-shop.md)                            | Accepted             | 2026-10-24 |
-| 0004 | [Supabase for login and signup, with an emailed code](0004-supabase-auth-with-email-code.md)      | Paused by 0005       | 2026-10-24 |
-| 0005 | [Email confirmation link instead of the sign-in code](0005-email-confirmation-instead-of-code.md) | Accepted (temporary) | 2026-10-24 |
-| 0006 | [Merchant catalogue on Supabase](0006-merchant-catalog-on-supabase.md)                             | Accepted             | 2026-10-30 |
-| 0007 | [Sales, till and invoices on Supabase](0007-sales-on-supabase.md)                                 | Accepted             | 2026-10-30 |
-| 0008 | [Suppliers, receptions and expenses on Supabase](0008-suppliers-receptions-expenses-on-supabase.md) | Accepted           | 2026-10-31 |
-| 0009 | [Team, deposits and notifications on Supabase](0009-team-deposits-notifications-on-supabase.md) | Accepted             | 2026-10-31 |
+| ID   | Title                                                                                               | Status               | Date       |
+| ---- | --------------------------------------------------------------------------------------------------- | -------------------- | ---------- |
+| 0001 | [Static Astro site with React islands](0001-static-astro-with-react-islands.md)                     | Accepted             | 2026-10-23 |
+| 0002 | [Front-end demo mode until the API exists](0002-demo-mode-without-backend.md)                       | Amended by 0004      | 2026-10-23 |
+| 0003 | [One line of business per shop](0003-one-line-of-business-per-shop.md)                              | Accepted             | 2026-10-24 |
+| 0004 | [Supabase for login and signup, with an emailed code](0004-supabase-auth-with-email-code.md)        | Paused by 0005       | 2026-10-24 |
+| 0005 | [Email confirmation link instead of the sign-in code](0005-email-confirmation-instead-of-code.md)   | Accepted (temporary) | 2026-10-24 |
+| 0006 | [Merchant catalogue on Supabase](0006-merchant-catalog-on-supabase.md)                              | Accepted             | 2026-10-30 |
+| 0007 | [Sales, till and invoices on Supabase](0007-sales-on-supabase.md)                                   | Accepted             | 2026-10-30 |
+| 0008 | [Suppliers, receptions and expenses on Supabase](0008-suppliers-receptions-expenses-on-supabase.md) | Accepted             | 2026-10-31 |
+| 0009 | [Team, deposits and notifications on Supabase](0009-team-deposits-notifications-on-supabase.md)     | Accepted             | 2026-10-31 |

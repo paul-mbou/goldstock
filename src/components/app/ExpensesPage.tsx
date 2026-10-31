@@ -384,8 +384,8 @@ function ExpenseDialog({
   const people = demo.team.filter((item) => item.status !== 'suspended');
   const set =
     <K extends keyof ReturnType<typeof blank>>(key: K) =>
-      (value: ReturnType<typeof blank>[K]) =>
-        setForm((current) => ({ ...current, [key]: value }));
+    (value: ReturnType<typeof blank>[K]) =>
+      setForm((current) => ({ ...current, [key]: value }));
 
   const close = () => {
     setForm(blank());

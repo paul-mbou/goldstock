@@ -28,12 +28,15 @@ export const expenseUuidOf = (code: string) => expenseUuids.get(code) ?? null;
 export async function loadSupply(shopId: string): Promise<SupplyResult<SupplySnapshot>> {
   if (!isAuthLive) return fail('not-signed-in');
   const supabase = getSupabase();
-  const [{ data: supplierRows, error: supplierError }, { data: receptionRows, error: receptionError }, { data: expenseRows, error: expenseError }] =
-    await Promise.all([
-      supabase.from('suppliers').select('*').eq('shop_id', shopId).order('name'),
-      supabase.from('receptions').select('*').eq('shop_id', shopId).order('received_at', { ascending: false }).limit(200),
-      supabase.from('expenses').select('*').eq('shop_id', shopId).order('day', { ascending: false }).limit(500),
-    ]);
+  const [
+    { data: supplierRows, error: supplierError },
+    { data: receptionRows, error: receptionError },
+    { data: expenseRows, error: expenseError },
+  ] = await Promise.all([
+    supabase.from('suppliers').select('*').eq('shop_id', shopId).order('name'),
+    supabase.from('receptions').select('*').eq('shop_id', shopId).order('received_at', { ascending: false }).limit(200),
+    supabase.from('expenses').select('*').eq('shop_id', shopId).order('day', { ascending: false }).limit(500),
+  ]);
   if (supplierError || receptionError || expenseError) return fail('failed');
 
   receptionUuids.clear();
@@ -97,10 +100,7 @@ export async function receiveRemoteGoods(input: {
   return ok(mapReception(row));
 }
 
-export async function insertRemoteExpense(
-  shopId: string,
-  expense: Expense,
-): Promise<SupplyResult<Expense>> {
+export async function insertRemoteExpense(shopId: string, expense: Expense): Promise<SupplyResult<Expense>> {
   if (!isAuthLive) return fail('not-signed-in');
   const { data, error } = await getSupabase()
     .from('expenses')

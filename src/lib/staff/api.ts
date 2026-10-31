@@ -31,12 +31,15 @@ const WELCOME: Omit<Notification, 'at'> & { at?: number } = {
 export async function loadStaff(shopId: string): Promise<StaffResult<StaffSnapshot>> {
   if (!isAuthLive) return fail('not-signed-in');
   const supabase = getSupabase();
-  let [{ data: memberRows, error: memberError }, { data: depositRows, error: depositError }, { data: notificationRows, error: notificationError }] =
-    await Promise.all([
-      supabase.from('shop_members').select('*').eq('shop_id', shopId).order('created_at'),
-      supabase.from('deposits').select('*').eq('shop_id', shopId).order('day', { ascending: false }).limit(100),
-      supabase.from('notifications').select('*').eq('shop_id', shopId).order('at', { ascending: false }).limit(100),
-    ]);
+  let [
+    { data: memberRows, error: memberError },
+    { data: depositRows, error: depositError },
+    { data: notificationRows, error: notificationError },
+  ] = await Promise.all([
+    supabase.from('shop_members').select('*').eq('shop_id', shopId).order('created_at'),
+    supabase.from('deposits').select('*').eq('shop_id', shopId).order('day', { ascending: false }).limit(100),
+    supabase.from('notifications').select('*').eq('shop_id', shopId).order('at', { ascending: false }).limit(100),
+  ]);
   if (memberError || depositError || notificationError) return fail('failed');
 
   if (!memberRows?.length) {

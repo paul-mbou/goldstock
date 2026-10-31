@@ -20,8 +20,8 @@ Shared store still feeds islands; live mode hydrates + dual-writes. Demo mode (n
 
 ## In progress
 
-- Owner: **`npx supabase db push`** (or SQL Editor) for migrations `20261030100000` → `20261031120000` on `snwlfrnlcamxyaqvqyye`.
-- Owner: Vercel `PUBLIC_SUPABASE_*` (or `NEXT_PUBLIC_*`) at build time + redeploy; Confirm email on; Secure password change; Redirect URLs; email template; SMTP/domain when ready for real customers.
+- Migrations sales + supply + staff **applied** on `snwlfrnlcamxyaqvqyye` (2026-10-31 `db push`; catalogue was already there).
+- Owner still: Vercel `PUBLIC_SUPABASE_*` (or `NEXT_PUBLIC_*`) at build time + redeploy if production is still test mode; Confirm email on; Secure password change; Redirect URLs; email template; SMTP/domain when ready for real customers.
 
 ## Do not touch
 

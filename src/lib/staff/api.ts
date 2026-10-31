@@ -61,18 +61,18 @@ export async function loadStaff(shopId: string): Promise<StaffResult<StaffSnapsh
     const welcome = await insertRemoteNotification(shopId, { ...WELCOME, at: Date.now() });
     notificationRows = welcome.ok
       ? [
-          {
-            id: welcome.value.id,
-            shop_id: shopId,
-            kind: welcome.value.kind,
-            title: welcome.value.title,
-            body: welcome.value.body,
-            at: new Date(welcome.value.at).toISOString(),
-            read: welcome.value.read,
-            href: welcome.value.href,
-            roles: welcome.value.roles ?? null,
-          },
-        ]
+        {
+          id: welcome.value.id,
+          shop_id: shopId,
+          kind: welcome.value.kind,
+          title: welcome.value.title,
+          body: welcome.value.body,
+          at: new Date(welcome.value.at).toISOString(),
+          read: welcome.value.read,
+          href: welcome.value.href,
+          roles: welcome.value.roles ?? null,
+        },
+      ]
       : [];
   }
 

@@ -31,7 +31,7 @@ export function InvoiceDialog({ sale: initial, onClose }: { sale: Sale; onClose:
   };
 
   /** Validates the customer's contact and records the invoice; false when something must be fixed first. */
-  const issue = () => {
+  const issue = async () => {
     const next: typeof errors = {};
     if (phone.trim() && !draft.customerPhone) next.phone = 'Numéro à 9 chiffres, par exemple 6 77 12 34 56.';
     if (email.trim() && !draft.customerEmail) next.email = 'Adresse email invalide, par exemple nom@gmail.com.';
@@ -41,16 +41,16 @@ export function InvoiceDialog({ sale: initial, onClose }: { sale: Sale; onClose:
       document.getElementById(next.phone ? 'invoice-phone' : 'invoice-email')?.focus();
       return false;
     }
-    issueInvoice(sale.id, draft);
-    return true;
+    const result = await issueInvoice(sale.id, draft);
+    return result.ok;
   };
 
-  const print = () => {
-    if (issue()) window.print();
+  const print = async () => {
+    if (await issue()) window.print();
   };
 
-  const send = () => {
-    if (!issue()) return;
+  const send = async () => {
+    if (!(await issue())) return;
     window.open(whatsappLink(invoiceMessage(demo, draft), draft.customerPhone), '_blank', 'noopener,noreferrer');
   };
 

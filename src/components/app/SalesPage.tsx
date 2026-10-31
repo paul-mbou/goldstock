@@ -320,14 +320,21 @@ function Sales() {
         sale={opened}
         canEdit={role.cancel}
         onClose={() => setOpenId(null)}
-        onCancel={(sale) => {
-          setSaleCancelled(sale.id, true, member.name);
+        onCancel={async (sale) => {
+          const result = await setSaleCancelled(sale.id, true, member.name);
+          if (!result.ok) return;
           notify(`Vente ${sale.id} annulée, articles remis en stock.`, {
-            action: { label: 'Rétablir', run: () => setSaleCancelled(sale.id, false, member.name) },
+            action: {
+              label: 'Rétablir',
+              run: () => {
+                void setSaleCancelled(sale.id, false, member.name);
+              },
+            },
           });
         }}
-        onReturn={(sale, quantities) => {
-          returnItems(sale.id, quantities, member.name);
+        onReturn={async (sale, quantities) => {
+          const result = await returnItems(sale.id, quantities, member.name);
+          if (!result.ok) return;
           const count = Object.values(quantities).reduce((sum, value) => sum + value, 0);
           notify(`${count} article${count > 1 ? 's' : ''} retourné${count > 1 ? 's' : ''} et remis en stock.`);
         }}
@@ -347,8 +354,8 @@ function SaleDetail({
   sale: Sale | null;
   canEdit: boolean;
   onClose: () => void;
-  onCancel: (sale: Sale) => void;
-  onReturn: (sale: Sale, quantities: Record<string, number>) => void;
+  onCancel: (sale: Sale) => void | Promise<void>;
+  onReturn: (sale: Sale, quantities: Record<string, number>) => void | Promise<void>;
 }) {
   const [mode, setMode] = useState<'view' | 'return' | 'cancel' | 'receipt'>('view');
   const [quantities, setQuantities] = useState<Record<string, number>>({});

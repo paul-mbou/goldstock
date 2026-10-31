@@ -49,23 +49,35 @@ import {
   type CatalogResult,
 } from './catalog';
 import { takeDemoSetup } from './demo-setup';
+import {
+  issueRemoteInvoice,
+  loadSales,
+  nextSaleCode,
+  recordRemoteSale,
+  returnRemoteSaleItems,
+  setRemoteSaleCancelled,
+  type SalesResult,
+} from './sales';
 
 /** Shop id on Supabase while the catalogue is live; null in demo mode. */
 let remoteShopId: string | null = null;
 
 export const remoteShopIdOf = () => remoteShopId;
 
-/** Replaces categories, products and stock moves with the account's Supabase catalogue. */
+/** Replaces categories, products, stock moves and sales with the account's Supabase data. */
 export async function hydrateCatalog(): Promise<CatalogResult<true> | { ok: true; value: true }> {
   if (!isAuthLive) return { ok: true, value: true };
   const result = await loadCatalog();
   if (!result.ok) return result;
   remoteShopId = result.value.shopId;
+  const sales = await loadSales(remoteShopId);
   setDemo((demo) => ({
     ...demo,
     categories: result.value.categories,
     products: result.value.products,
     moves: result.value.moves,
+    // Soft-fail if the sales migration is missing: empty list, not seed sales with stale ids.
+    sales: sales.ok ? sales.value : [],
   }));
   return { ok: true, value: true };
 }
@@ -382,32 +394,70 @@ export type SaleInput = {
   reference: string;
 };
 
-export function recordSale(input: SaleInput): Sale {
-  let created: Sale | null = null;
-  setDemo((demo) => {
-    const items = flatItems(demo, { activeOnly: false });
-    const lines: SaleLine[] = input.lines.map(({ vid, qty, price }) => {
-      const { product, variant } = items.find((item) => item.variant.id === vid)!;
-      const changed = price !== undefined && price !== variant.price;
-      return {
-        pid: product.id,
-        vid,
-        name: product.name,
-        label: variant.label,
-        cat: product.cat,
+export async function recordSale(input: SaleInput): Promise<Sale | null> {
+  const demo = getSnapshot();
+  const items = flatItems(demo, { activeOnly: false });
+  const lineDrafts = input.lines.map(({ vid, qty, price }) => {
+    const { product, variant } = items.find((item) => item.variant.id === vid)!;
+    const unit = price !== undefined ? price : variant.price;
+    const changed = price !== undefined && price !== variant.price;
+    return {
+      variantId: vid,
+      qty,
+      price: unit,
+      ...(changed ? { listPrice: variant.price } : {}),
+      product,
+      variant,
+    };
+  });
+
+  if (remoteShopId) {
+    const result = await recordRemoteSale({
+      shopId: remoteShopId,
+      code: nextSaleCode(demo.sales.map((sale) => sale.id)),
+      shopName: input.shop,
+      sellerName: input.seller,
+      customer: input.customer.trim(),
+      discount: input.discount,
+      pay: input.pay,
+      received: input.received,
+      reference: input.reference.trim(),
+      lines: lineDrafts.map(({ variantId, qty, price, listPrice }) => ({
+        variantId,
         qty,
-        price: changed ? price : variant.price,
-        ...(changed && { listPrice: variant.price }),
-        cost: variant.cost,
-        returned: 0,
-      };
+        price,
+        ...(listPrice !== undefined ? { listPrice } : {}),
+      })),
     });
+    if (!result.ok) return null;
+    const created = result.value;
+    const deltas = Object.fromEntries(input.lines.map(({ vid, qty }) => [vid, -qty]));
+    setDemo((current) => ({
+      ...current,
+      sales: [created, ...current.sales],
+      products: shiftStock(current.products, deltas),
+      activity: withActivity(current, input.seller, `a encaissé la vente ${created.id} à ${input.shop}`, 'sale'),
+    }));
+    return created;
+  }
+
+  let created: Sale | null = null;
+  setDemo((current) => {
+    const lines: SaleLine[] = lineDrafts.map(({ variantId, qty, price, listPrice, product, variant }) => ({
+      pid: product.id,
+      vid: variantId,
+      name: product.name,
+      label: variant.label,
+      cat: product.cat,
+      qty,
+      price,
+      ...(listPrice !== undefined ? { listPrice } : {}),
+      cost: variant.cost,
+      returned: 0,
+    }));
     created = {
-      id: nextId(
-        demo.sales.map((sale) => sale.id),
-        'V-',
-      ),
-      at: nextTime(demo),
+      id: nextSaleCode(current.sales.map((sale) => sale.id)),
+      at: nextTime(current),
       shop: input.shop,
       seller: input.seller,
       customer: input.customer.trim(),
@@ -423,34 +473,83 @@ export function recordSale(input: SaleInput): Sale {
     };
     const deltas = Object.fromEntries(input.lines.map(({ vid, qty }) => [vid, -qty]));
     return {
-      ...demo,
-      sales: [created, ...demo.sales],
-      products: shiftStock(demo.products, deltas),
-      activity: withActivity(demo, input.seller, `a encaissé la vente ${created.id} à ${input.shop}`, 'sale'),
+      ...current,
+      sales: [created, ...current.sales],
+      products: shiftStock(current.products, deltas),
+      activity: withActivity(current, input.seller, `a encaissé la vente ${created.id} à ${input.shop}`, 'sale'),
     };
   });
-  return created!;
+  return created;
 }
 
 const remaining = (sale: Sale, sign: 1 | -1) =>
   Object.fromEntries(sale.lines.map((line) => [line.vid, sign * (line.qty - line.returned)]));
 
-export function setSaleCancelled(id: string, cancelled: boolean, user: string) {
-  setDemo((demo) => {
-    const sale = demo.sales.find((item) => item.id === id);
-    if (!sale || sale.cancelled === cancelled) return demo;
-    return {
+export async function setSaleCancelled(
+  id: string,
+  cancelled: boolean,
+  user: string,
+): Promise<SalesResult<true> | { ok: true; value: true }> {
+  const sale = getSnapshot().sales.find((item) => item.id === id);
+  if (!sale || sale.cancelled === cancelled) return { ok: true, value: true };
+
+  if (remoteShopId) {
+    const result = await setRemoteSaleCancelled(id, cancelled);
+    if (!result.ok) return result;
+    setDemo((demo) => ({
       ...demo,
-      sales: demo.sales.map((item) => (item.id === id ? { ...item, cancelled } : item)),
+      sales: demo.sales.map((item) => (item.id === id ? result.value : item)),
       products: shiftStock(demo.products, remaining(sale, cancelled ? 1 : -1)),
       activity: withActivity(demo, user, cancelled ? `a annulé la vente ${id}` : `a rétabli la vente ${id}`, 'sale'),
-    };
-  });
+    }));
+    return { ok: true, value: true };
+  }
+
+  setDemo((demo) => ({
+    ...demo,
+    sales: demo.sales.map((item) => (item.id === id ? { ...item, cancelled } : item)),
+    products: shiftStock(demo.products, remaining(sale, cancelled ? 1 : -1)),
+    activity: withActivity(demo, user, cancelled ? `a annulé la vente ${id}` : `a rétabli la vente ${id}`, 'sale'),
+  }));
+  return { ok: true, value: true };
 }
 
-export function returnItems(id: string, quantities: Record<string, number>, user: string) {
+export async function returnItems(
+  id: string,
+  quantities: Record<string, number>,
+  user: string,
+): Promise<SalesResult<true> | { ok: true; value: true }> {
+  const sale = getSnapshot().sales.find((item) => item.id === id);
+  if (!sale) return { ok: false, error: 'not-found' };
+
+  if (remoteShopId) {
+    const result = await returnRemoteSaleItems(id, quantities, user);
+    if (!result.ok) return result;
+    const at = Date.now();
+    const returned = sale.lines.filter((line) => quantities[line.vid] > 0);
+    setDemo((demo) => ({
+      ...demo,
+      sales: demo.sales.map((item) => (item.id === id ? result.value : item)),
+      products: shiftStock(demo.products, quantities),
+      moves: [
+        ...returned.map((line, index) => ({
+          id: `m${at}${index}`,
+          at,
+          type: 'return' as const,
+          item: line.label ? `${line.name} · ${line.label}` : line.name,
+          qty: quantities[line.vid],
+          user,
+          note: `Retour client ${id}`,
+          source: sale.customer || 'Client',
+        })),
+        ...demo.moves,
+      ],
+      activity: withActivity(demo, user, `a enregistré un retour sur la vente ${id}`, 'sale'),
+    }));
+    return { ok: true, value: true };
+  }
+
   setDemo((demo) => {
-    const sale = demo.sales.find((item) => item.id === id)!;
     const at = nextTime(demo);
     const returned = sale.lines.filter((line) => quantities[line.vid] > 0);
     return {
@@ -459,7 +558,10 @@ export function returnItems(id: string, quantities: Record<string, number>, user
         item.id === id
           ? {
             ...item,
-            lines: item.lines.map((line) => ({ ...line, returned: line.returned + (quantities[line.vid] ?? 0) })),
+            lines: item.lines.map((line) => ({
+              ...line,
+              returned: line.returned + (quantities[line.vid] ?? 0),
+            })),
           }
           : item,
       ),
@@ -480,6 +582,7 @@ export function returnItems(id: string, quantities: Record<string, number>, user
       activity: withActivity(demo, user, `a enregistré un retour sur la vente ${id}`, 'sale'),
     };
   });
+  return { ok: true, value: true };
 }
 
 export async function adjustStock(vid: string, delta: number, type: MoveType, note: string, user: string) {
@@ -787,15 +890,25 @@ export function logActivity(user: string, text: string, icon: ActivityIcon) {
 export type InvoiceCustomer = Pick<Sale, 'customer' | 'customerPhone' | 'customerEmail'>;
 
 /** Saves who the invoice is for and fixes its date the first time it is printed or sent. */
-export function issueInvoice(id: string, customer: InvoiceCustomer) {
+export async function issueInvoice(
+  id: string,
+  customer: InvoiceCustomer,
+): Promise<SalesResult<true> | { ok: true; value: true }> {
+  const sale = getSnapshot().sales.find((item) => item.id === id);
+  if (!sale) return { ok: false, error: 'not-found' };
+  const trimmed = { ...customer, customer: customer.customer.trim() };
+  const invoicedAt = invoiceDate(sale);
+
+  if (remoteShopId) {
+    const result = await issueRemoteInvoice(id, trimmed, invoicedAt);
+    if (!result.ok) return result;
+  }
+
   setDemo((demo) => ({
     ...demo,
-    sales: demo.sales.map((sale) =>
-      sale.id === id
-        ? { ...sale, ...customer, customer: customer.customer.trim(), invoicedAt: invoiceDate(sale) }
-        : sale,
-    ),
+    sales: demo.sales.map((item) => (item.id === id ? { ...item, ...trimmed, invoicedAt } : item)),
   }));
+  return { ok: true, value: true };
 }
 
 /* ------------------------------------------------------------------ deposits */

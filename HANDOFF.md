@@ -1,41 +1,23 @@
 # HANDOFF — GOLDSTOCK
 
 > Short session bridge. Update at end of every work session. Keep ≤ 1 screen.
-> Last updated: 2026-10-24 · By: Cursor agent
+> Last updated: 2026-10-30 · By: Cursor agent
 
 ## Goal of current work
 
-Connect the merchant dashboard to Supabase in batches of 3 features + tests. Batch 1 (ADR 0006): **categories, products, stock moves**. Auth stays as ADR 0004/0005.
+Connect the merchant dashboard to Supabase in batches of 3 features + tests. Batch 2 (ADR 0007): **ventes + caisse + reçus/factures**. Batch 1 catalogue (ADR 0006) is on `main` (`448f70d`).
 
 ## Done since last handoff
 
-- **Fictional data removed** (`DEMO_VERSION` 6): the seed in `createSeed` (`dashboard.ts`) only keeps the categories of the chosen activity (`catalogs.ts` = `CATEGORIES`), one shop, the owner (`ownerMember`, name and phone from signup or the Supabase `profiles` row via `fetchOwner`), a trial plan (`Plan.trial`, `site.trialDays`) and a welcome notification. No sample products, sales, team, suppliers, deposits, expenses, invoices or tickets. « Voir l'espace en tant que » uses `memberFor` in `demo.ts` (first real member with that role, else a stand-in). « Repartir de zéro » (ex « Réinitialiser la démo ») asks for confirmation and keeps the owner.
-- **Guided tour** (`GuidedTour.tsx`, steps in `src/data/tour.ts`, helpers in `src/lib/tour.ts`, mounted in `AppLayout`): 17 steps filtered by role, spotlight on `data-tour` targets (sidebar, bottom bar, search, notifications, account), card docked top/bottom under 640 px, hint « Dans le menu… » when the entry is hidden. Opens on first `/app` visit (`localStorage gs-tour`); signup calls `resetTour()`; « Voir la page » leaves a « Reprendre la visite » pill (`sessionStorage gs-tour-resume`); relaunch from the account menu or the dashboard « Premiers pas » card (hidden flag `localStorage gs-checklist`).
-- Empty states for an empty shop: Produits, Stock, Caisse, Ventes, Fournisseurs, Versements, Rapports, Abonnement (invoices), dashboard (« Premiers pas » checklist, deposits intro).
-
-- Supabase project « Gold Stock » (`snwlfrnlcamxyaqvqyye`) linked; migrations `20261024100000` → `20261024150000` applied; `email-otp` deployed but unused. Google sign-in was **cancelled** by the owner: `20261024120000` added it, `20261024140000` undoes it (keep both files, they are in the remote history).
-- Account editing for the owner (Paramètres): « Mon profil » → Mot de passe (`changePassword` in `auth.ts`: re-checks the current password, then signs other devices out); « Entreprise » → Logo (`src/lib/shop.ts`, public bucket `shop-logos/<shop id>/…`, `shops.logo_path`, migration `20261024150000`). The logo shows in the sidebar `ShopCard` and on receipts (switch « Logo sur le reçu »); `AppLayout` re-reads it from Supabase on every `/app` load. Tested in test mode only — no confirmed live account to sign in with.
-- `EMAIL_CODE_ENABLED = false` in `src/lib/auth.ts`; signup / unconfirmed login show `CheckEmailStep` (resend with 60 s cooldown, webmail shortcut, auto-redirect when confirmed in another tab); `/confirmer-email` opens the session from the link (token_hash, `#access_token` or `?code=`) and goes to `/app`, or offers a new link if expired.
-- No dashboard before the address is confirmed: `isConfirmed()` in `auth.ts` (`email_confirmed_at`) also guards `login`, `signup` and `getAuthState` (new status `confirm-email` → `/app` sends to `/connexion`, which shows `CheckEmailStep`), in case « Confirm email » is ever switched off. Signup warns before submitting (email hint + note above the button); `CheckEmailStep` lists the three steps (account created, address to confirm, dashboard locked). Note: with « Confirm email » off Supabase auto-confirms, so the dashboard setting stays mandatory.
-- Auth hardening (2026-10-30): `getAuthState` uses `getUser()` (rejects forged local sessions); confirmation links accept only `type=signup`; `changePassword` no longer re-signs-in (keeps `session_id`); `/confirmer-email` sends `Referrer-Policy: no-referrer`. The client also accepts Vercel’s `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` as a fallback for the usual `PUBLIC_*` names.
-- **Production (goldstock-psi.vercel.app) still runs in test mode** until env vars are present at build time (or after this hardening is deployed and the integration names are set). Owner: confirm Production + Preview env vars, enable « Secure password change » in Supabase Email provider, keep « Confirm email » on, set Redirect URLs, redeploy.
-- Browser checks: `/app` redirects when signed out; expired link page; unconfirmed login → check-email screen.
-- Catégories: characteristics can now be edited (pencil → dialog with the add-form fields) besides added and deleted (delete offers « Annuler »). Edits keep the attribute `id`, so product values stay linked; once products use a characteristic its type and variant/descriptive usage are locked, and removing a value in use shows how many products keep it. `ProductFormPage` still displays a stored value that is no longer in the list.
-- Stock: « Entrée » / « Sortie » buttons open `MoveDialog` (article, quantity, provenance or motif + detail, date ≤ today, author from the team, note) → `recordMove` in `demo.ts` (new move types `entry` / `exit`, optional `Move.source` / `Move.destination`, back-dated moves filed at their date). Receptions and customer returns now fill `source`. History tab: Entrées / Sorties filter, search on article, author, provenance.
-- Long forms open in the right-hand sheet (AGENTS rule 12): stock move, characteristic edit, sale detail, expense, deposit, supplier, till cart. The sheet slides in (280 ms) and out (200 ms) with its backdrop (`sheet-*` / `backdrop-*` in `global.css`); `Modal` keeps showing the last content while it closes. A sheet that is only rendered when needed must stay mounted for the exit to play: use `useSheet()` or `useLatest()` from `ui.tsx` and pass `open`.
-- Prices set by the owner: 10 000 / 15 000 / 25 000 FCFA (`site.ts`, JSON-LD in `Layout.astro`).
-- Shops are now store data (`demo.shops`, `ShopInfo` with address; `SHOPS` and `settings.addresses` removed). Paramètres → Boutiques: « Ajouter une boutique » only while `shopQuota(demo)` allows it (`PLAN_LIMITS`), otherwise an upgrade banner. No rename or delete yet.
-- New screen Dépenses (`/app/depenses`, `ExpensesPage.tsx`, `recordExpense` / `deleteExpense` / `visibleExpenses` in `demo.ts`, seed in `dashboard.ts`). « Bénéfice après dépenses » = month margin − expenses, on that screen only; Rapports and Versements ignore expenses for now.
-- Invoice from a sale (Ventes sheet and till receipt → « Facture »): `Invoice.tsx` + `src/lib/invoice.ts` (company block with legal name, NIU, RCCM, shop address; amount in French words). « Imprimer ou PDF » prints it; « Envoyer sur WhatsApp » opens `wa.me` with a text version (a link cannot attach a PDF) and saves the client on the sale. The client's phone or email is required (both allowed: `customerPhone`, `customerEmail`); the invoice date is fixed at the first print or send (`invoicedAt`, `invoiceDate()` in `dashboard.ts`) and shown next to the sale date.
-- Versements: the manager declares a deposit to the owner (« Déclarer un versement », `declareDeposit` / `withdrawDeposit` / `undeclaredDays` in `demo.ts`). One per shop and day over the last 14 days; expected cash comes from `cashSalesTotal`; a gap needs an explanation (`comment`), Mobile Money or transfer needs a transaction number (`reference`). It lands « À vérifier » with a notification for the owner only (`Notification.roles`), who sees both in the review dialog.
-- Price agreed at the till: in the Caisse cart each line's price can be changed for that sale only (`PriceEditor` in `PosPage.tsx`, `recordSale` takes `lines[].price`). The catalogue price (`Variant.price`) never changes; a changed line keeps it in `SaleLine.listPrice`, shown in the Ventes sale sheet (« Prix changé à la vente »). Anyone with Caisse access may go up or down; below the purchase cost only roles with `Role.sellBelowCost` (owner). Remise limits per role are unchanged. No `DEMO_VERSION` bump (still 6), so entered data survives.
-- Dev tip: a long-running `astro dev` can keep serving a stale module after edits (watcher missed it); if behaviour doesn't match the code, fetch `/src/...tsx` from the server to check, and restart.
+- **Batch 1** pushed: migration `20261030100000_merchant_catalog.sql`, `src/lib/catalog/`, hydrate + dual-write, Vitest.
+- **Batch 2 (ready, uncommitted until owner asks):** ADR `0007-sales-on-supabase.md`; migration `20261030120000_sales.sql` (`sales`, `sale_lines`, RPCs `record_sale` / `set_sale_cancelled` / `return_sale_items`); `src/lib/sales/` (types, api, Vitest); `demo.ts` hydrates sales with the catalogue and dual-writes till / cancel / return / invoice; Pos / Sales / Invoice await those writes. Demo mode (no env) stays local-only.
+- Auth hardening still on `main` (`fffad9b`). Production may still be test mode until Vercel `PUBLIC_*` (or `NEXT_PUBLIC_*` fallback) is set at build time.
 
 ## In progress
 
-- **Batch 1 catalogue (uncommitted until owner asks):** migration `20261030100000_merchant_catalog.sql`, `src/lib/catalog/`, hydrate in `AppLayout`, writes via `saveCategory` / `saveProduct` / `recordMove`. Vitest: `npm test`. Owner must **apply the migration** on project `snwlfrnlcamxyaqvqyye` (SQL Editor or `supabase db push`) before live catalogue works; until then demo mode / empty hydrate fails softly.
-- Next batches (proposal): 2) ventes + caisse + reçus ; 3) fournisseurs + réceptions + dépenses ; 4) équipe + versements + notifications.
-- Owner still: Confirm email on, Secure password change, Redirect URLs, email template, Vercel env vars + redeploy.
+- Owner must **apply** catalog + sales migrations on project `snwlfrnlcamxyaqvqyye` before live till works; hydrate soft-fails (empty sales) if sales tables are missing.
+- Next batches (proposal): 3) fournisseurs + réceptions + dépenses ; 4) équipe + versements + notifications.
+- Owner still: Confirm email on, Secure password change, Redirect URLs, email template, Vercel env + redeploy.
 
 ## Do not touch
 
@@ -44,10 +26,9 @@ Connect the merchant dashboard to Supabase in batches of 3 features + tests. Bat
 
 ## Blockers / open questions
 
-- No domain: Supabase's built-in mailer only reaches team members (few emails per hour, already rate-limited once today). Real customers need custom SMTP (e.g. Gmail app password) or a domain.
-- The dashboard clock is still fixed (`NOW` = 23 Oct 2026 14:30 in `dashboard.ts`) so server and client renders match; new records are timed just after it (`nextTime` in `demo.ts`). Moving to the real clock needs hydration-safe rendering.
-- No password reset yet ("Mot de passe oublié" still opens WhatsApp).
-- Vercel still needs `PUBLIC_SUPABASE_URL` and `PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+- No domain: Supabase built-in mailer rate-limits; real customers need SMTP or a domain.
+- Dashboard clock still fixed (`NOW` in `dashboard.ts`).
+- No password reset yet.
 
 ## How to validate
 
@@ -63,4 +44,4 @@ npx prettier --check .
 - Contract: `AGENTS.md`
 - Product: `docs/PRODUCT.md`
 - Knowledge: `docs/knowledge/INDEX.md`
-- Latest ADR: `docs/decisions/0005-email-confirmation-instead-of-code.md`
+- Latest sales ADR: `docs/decisions/0007-sales-on-supabase.md`

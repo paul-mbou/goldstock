@@ -29,7 +29,7 @@ import {
   type Shop,
 } from '../../data/dashboard';
 import { formatPhone, normalizePhone } from '../../lib/auth';
-import { logActivity, setDemo, useSession } from '../../lib/demo';
+import { inviteMember, logActivity, patchMember, useSession } from '../../lib/demo';
 import { PhoneField, TextField } from '../auth/fields';
 import { Screen } from './Screen';
 import {
@@ -68,12 +68,6 @@ const activityIcons: Record<ActivityIcon, LucideIcon> = {
   cash: Wallet,
   expense: BanknoteArrowDown,
 };
-
-const updateMember = (id: string, patch: Partial<Member>) =>
-  setDemo((demo) => ({
-    ...demo,
-    team: demo.team.map((member) => (member.id === id ? { ...member, ...patch } : member)),
-  }));
 
 function Team() {
   const { demo, role, member: me } = useSession();
@@ -145,16 +139,23 @@ function Team() {
                   isMe={member.id === me.id}
                   editable={editable && member.role !== 'owner'}
                   sales={member.role === 'seller' || member.role === 'manager' ? salesToday(member.name) : null}
-                  onRole={(next) => {
-                    updateMember(member.id, { role: next });
+                  onRole={async (next) => {
+                    const result = await patchMember(member.id, { role: next });
+                    if (!result.ok) return;
                     logActivity(me.name, `a nommé ${member.name} ${ROLES[next].label.toLowerCase()}`, 'team');
                     notify(`${member.name} est maintenant ${ROLES[next].label.toLowerCase()}.`);
                   }}
-                  onToggle={() => {
+                  onToggle={async () => {
                     const suspended = member.status !== 'suspended';
-                    updateMember(member.id, { status: suspended ? 'suspended' : 'active' });
+                    const result = await patchMember(member.id, { status: suspended ? 'suspended' : 'active' });
+                    if (!result.ok) return;
                     notify(suspended ? `Accès de ${member.name} suspendu.` : `Accès de ${member.name} rétabli.`, {
-                      action: { label: 'Annuler', run: () => updateMember(member.id, { status: member.status }) },
+                      action: {
+                        label: 'Annuler',
+                        run: () => {
+                          void patchMember(member.id, { status: member.status });
+                        },
+                      },
                     });
                   }}
                   onResend={() => notify(`Invitation renvoyée par SMS à ${member.phone}.`)}
@@ -254,11 +255,11 @@ function Team() {
         <InviteDialog
           open={inviting}
           onClose={() => setInviting(false)}
-          onInvite={(member) => {
-            setDemo((current) => ({ ...current, team: [...current.team, member] }));
-            logActivity(me.name, `a invité ${member.name} (${ROLES[member.role].label.toLowerCase()})`, 'team');
+          onInvite={async (draft) => {
+            const result = await inviteMember(draft, me.name);
+            if (!result.ok) return;
             setInviting(false);
-            notify(`Invitation envoyée par SMS à ${member.phone}.`);
+            notify(`Invitation envoyée par SMS à ${result.value.phone}.`);
           }}
         />
       )}
@@ -280,8 +281,8 @@ function MemberRow({
   isMe: boolean;
   editable: boolean;
   sales: number | null;
-  onRole: (role: RoleId) => void;
-  onToggle: () => void;
+  onRole: (role: RoleId) => void | Promise<void>;
+  onToggle: () => void | Promise<void>;
   onResend: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -393,7 +394,7 @@ function InviteDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onInvite: (member: Member) => void;
+  onInvite: (draft: Omit<Member, 'id' | 'lastSeen'>) => void | Promise<void>;
 }) {
   const { demo } = useSession();
   const [name, setName] = useState('');
@@ -410,7 +411,7 @@ function InviteDialog({
     setErrors({});
   };
 
-  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+  const submit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalized = normalizePhone(phone);
     const next: typeof errors = {};
@@ -419,14 +420,12 @@ function InviteDialog({
     setErrors(next);
     if (!normalized || Object.keys(next).length) return;
     const local = normalized.slice(4);
-    onInvite({
-      id: `u${Date.now().toString(36)}`,
+    await onInvite({
       name: name.trim(),
       phone: `+237 ${local.slice(0, 3)} ${local.slice(3, 5)} ${local.slice(5, 7)} ${local.slice(7)}`,
       role,
       shop,
       status: 'invited',
-      lastSeen: null,
     });
     reset();
   };

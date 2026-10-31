@@ -36,7 +36,7 @@ function Notifications() {
             <button
               type="button"
               className="btn-quiet h-11 px-4"
-              onClick={() => markNotificationsRead(unread.map((item) => item.id))}
+              onClick={() => void markNotificationsRead(unread.map((item) => item.id))}
             >
               <CheckCheck className="size-[1.125rem]" aria-hidden="true" />
               Tout marquer comme lu
@@ -72,7 +72,7 @@ function Notifications() {
                 <li key={item.id}>
                   <a
                     href={item.href}
-                    onClick={() => markNotificationsRead([item.id])}
+                    onClick={() => void markNotificationsRead([item.id])}
                     className={`flex items-start gap-4 px-4 py-4 transition hover:bg-sunken/60 sm:px-5 ${item.read ? '' : 'bg-gold-50/40 dark:bg-gold-400/[0.04]'}`}
                   >
                     <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${style.className}`}>

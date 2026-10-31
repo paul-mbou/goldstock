@@ -5,18 +5,18 @@
 
 ## Goal of current work
 
-Connect the merchant dashboard to Supabase in batches of 3 features + tests. Batch 3 (ADR 0008): **fournisseurs + réceptions + dépenses**. Batches 1–2 on `main` (`448f70d`, `f7de8c9`).
+Connect the merchant dashboard to Supabase in batches of 3 features + tests. Batch 4 (ADR 0009): **équipe + versements + notifications**. Batches 1–3 on `main` (`448f70d`, `f7de8c9`, `4ebcaeb`).
 
 ## Done since last handoff
 
-- **Batch 2** pushed (`f7de8c9`): sales / till / invoices.
-- **Batch 3 (ready, uncommitted until owner asks):** ADR `0008`; migration `20261031100000_supply.sql` (suppliers, receptions, reception_lines, expenses, RPC `receive_goods`); `src/lib/supply/`; hydrate + dual-write in `demo.ts`; Suppliers / Expenses UI await writes; Vitest mappers + codes.
+- **Batch 3** pushed (`4ebcaeb`): suppliers / receptions / expenses.
+- **Batch 4 (ready, uncommitted until owner asks):** ADR `0009`; migration `20261031120000_staff.sql` (`shop_members`, `deposits`, `notifications`, RPCs `declare_deposit` / `withdraw_deposit`); `src/lib/staff/`; hydrate + dual-write; Team / Deposits / notifications UI; Vitest mappers. Staff = roster only (no auth accounts yet).
 
 ## In progress
 
-- Owner must **apply** catalog + sales + supply migrations on `snwlfrnlcamxyaqvqyye` before live supply works; hydrate soft-fails to empty lists if tables are missing.
-- Next batch (proposal): 4) équipe + versements + notifications.
+- Owner must **apply** catalog + sales + supply + staff migrations on `snwlfrnlcamxyaqvqyye`.
 - Owner still: Confirm email on, Secure password change, Redirect URLs, email template, Vercel env + redeploy.
+- Later: staff auth linked to `auth.users`, multi-shop rows, password reset.
 
 ## Do not touch
 
@@ -43,4 +43,4 @@ npx prettier --check .
 - Contract: `AGENTS.md`
 - Product: `docs/PRODUCT.md`
 - Knowledge: `docs/knowledge/INDEX.md`
-- Latest supply ADR: `docs/decisions/0008-suppliers-receptions-expenses-on-supabase.md`
+- Latest staff ADR: `docs/decisions/0009-team-deposits-notifications-on-supabase.md`

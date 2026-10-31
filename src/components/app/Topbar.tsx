@@ -136,29 +136,29 @@ function GlobalSearch() {
         })),
       ...(can('sales')
         ? visibleSales(session)
-            .filter((s) => matches(s.id, s.customer))
-            .slice(0, 4)
-            .map((s) => ({
-              id: s.id,
-              group: 'Ventes',
-              title: s.customer ? `${s.id} · ${s.customer}` : s.id,
-              meta: role.revenue ? formatFcfa(saleNet(s)) : s.shop,
-              href: `/app/ventes?q=${encodeURIComponent(s.id)}`,
-              icon: ReceiptText,
-            }))
+          .filter((s) => matches(s.id, s.customer))
+          .slice(0, 4)
+          .map((s) => ({
+            id: s.id,
+            group: 'Ventes',
+            title: s.customer ? `${s.id} · ${s.customer}` : s.id,
+            meta: role.revenue ? formatFcfa(saleNet(s)) : s.shop,
+            href: `/app/ventes?q=${encodeURIComponent(s.id)}`,
+            icon: ReceiptText,
+          }))
         : []),
       ...(can('team')
         ? demo.team
-            .filter((m) => matches(m.name, ROLES[m.role].label))
-            .slice(0, 3)
-            .map((m) => ({
-              id: m.id,
-              group: 'Équipe',
-              title: m.name,
-              meta: ROLES[m.role].label,
-              href: '/app/equipe',
-              icon: User,
-            }))
+          .filter((m) => matches(m.name, ROLES[m.role].label))
+          .slice(0, 3)
+          .map((m) => ({
+            id: m.id,
+            group: 'Équipe',
+            title: m.name,
+            meta: ROLES[m.role].label,
+            href: '/app/equipe',
+            icon: User,
+          }))
         : []),
     ];
   }, [query, session]);
@@ -320,7 +320,7 @@ function Notifications() {
               <button
                 type="button"
                 className="rounded-lg px-2 py-1 text-sm font-semibold text-gold-700 transition hover:bg-sunken dark:text-gold-300"
-                onClick={() => markNotificationsRead(unread.map((item) => item.id))}
+                onClick={() => void markNotificationsRead(unread.map((item) => item.id))}
               >
                 Tout marquer comme lu
               </button>
@@ -333,7 +333,7 @@ function Notifications() {
                 <li key={notice.id}>
                   <a
                     href={notice.href}
-                    onClick={() => markNotificationsRead([notice.id])}
+                    onClick={() => void markNotificationsRead([notice.id])}
                     className="flex gap-3 px-4 py-3.5 transition hover:bg-sunken"
                   >
                     <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${className}`}>
@@ -567,9 +567,8 @@ function BottomNav({ current, onMore }: { current: string; onMore: () => void })
                 href={hrefOf(id)}
                 data-tour={`nav-${id}`}
                 aria-current={active ? 'page' : undefined}
-                className={`flex h-16 flex-col items-center justify-center gap-1 text-[0.6875rem] font-semibold transition ${
-                  active ? 'text-gold-700 dark:text-gold-300' : 'text-ink-mute hover:text-ink'
-                }`}
+                className={`flex h-16 flex-col items-center justify-center gap-1 text-[0.6875rem] font-semibold transition ${active ? 'text-gold-700 dark:text-gold-300' : 'text-ink-mute hover:text-ink'
+                  }`}
               >
                 <span
                   className={`grid h-7 w-12 place-items-center rounded-full transition ${active ? 'bg-gold-100 dark:bg-gold-400/15' : ''}`}

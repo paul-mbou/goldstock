@@ -60,6 +60,16 @@ import {
   type SalesResult,
 } from './sales';
 import {
+  declareRemoteDeposit,
+  insertRemoteMember,
+  loadStaff,
+  markRemoteNotificationsRead,
+  updateRemoteDeposit,
+  updateRemoteMember,
+  withdrawRemoteDeposit,
+  type StaffResult,
+} from './staff';
+import {
   deleteRemoteExpense,
   insertRemoteExpense,
   insertRemoteSupplier,
@@ -74,13 +84,17 @@ let remoteShopId: string | null = null;
 
 export const remoteShopIdOf = () => remoteShopId;
 
-/** Replaces catalogue, sales, suppliers, receptions and expenses with the account's Supabase data. */
+/** Replaces catalogue, sales, supply and staff data with the account's Supabase data. */
 export async function hydrateCatalog(): Promise<CatalogResult<true> | { ok: true; value: true }> {
   if (!isAuthLive) return { ok: true, value: true };
   const result = await loadCatalog();
   if (!result.ok) return result;
   remoteShopId = result.value.shopId;
-  const [sales, supply] = await Promise.all([loadSales(remoteShopId), loadSupply(remoteShopId)]);
+  const [sales, supply, staff] = await Promise.all([
+    loadSales(remoteShopId),
+    loadSupply(remoteShopId),
+    loadStaff(remoteShopId),
+  ]);
   setDemo((demo) => ({
     ...demo,
     categories: result.value.categories,
@@ -91,6 +105,9 @@ export async function hydrateCatalog(): Promise<CatalogResult<true> | { ok: true
     suppliers: supply.ok ? supply.value.suppliers : [],
     receptions: supply.ok ? supply.value.receptions : [],
     expenses: supply.ok ? supply.value.expenses : [],
+    team: staff.ok ? staff.value.team : demo.team,
+    deposits: staff.ok ? staff.value.deposits : [],
+    notifications: staff.ok ? staff.value.notifications : demo.notifications,
   }));
   return { ok: true, value: true };
 }
@@ -232,11 +249,16 @@ export function setRole(role: RoleId) {
   setDemo((demo) => ({ ...demo, role }));
 }
 
-export function markNotificationsRead(ids: string[]) {
+export async function markNotificationsRead(ids: string[]) {
+  if (remoteShopId) {
+    const result = await markRemoteNotificationsRead(ids);
+    if (!result.ok) return result;
+  }
   setDemo((demo) => ({
     ...demo,
     notifications: demo.notifications.map((item) => (ids.includes(item.id) ? { ...item, read: true } : item)),
   }));
+  return { ok: true as const, value: true as const };
 }
 
 /* ------------------------------------------------------------------ periods and totals */
@@ -1012,16 +1034,57 @@ export function undeclaredDays(demo: DemoState, shop: Shop) {
 
 export type DepositInput = Pick<Deposit, 'shop' | 'day' | 'deposited' | 'method' | 'reference' | 'comment'>;
 
+const depositNoticeBody = (input: DepositInput, manager: string, expected: number) => {
+  const gap = input.deposited - expected;
+  return `${manager} a remis ${formatFcfa(input.deposited)} (${input.method}) pour le ${formatLongDay(input.day).toLowerCase()}${gap < 0 ? `. Il manque ${formatFcfa(-gap)}.` : gap > 0 ? `, ${formatFcfa(gap)} de plus que prévu.` : '.'
+    }`;
+};
+
 /** A manager hands the day's cash to the owner: it waits as "à vérifier" and the owner is notified. */
-export function declareDeposit(input: DepositInput, manager: string): Deposit {
+export async function declareDeposit(input: DepositInput, manager: string): Promise<Deposit | null> {
+  const demo = getSnapshot();
+  const expected = cashSalesTotal(demo.sales, input.shop, input.day);
+  const reference = input.reference.trim();
+  const comment = input.comment.trim();
+  const title = `Versement à vérifier : ${input.shop}`;
+  const body = depositNoticeBody({ ...input, reference, comment }, manager, expected);
+
+  if (remoteShopId) {
+    const result = await declareRemoteDeposit(remoteShopId, {
+      day: input.day,
+      shopName: input.shop,
+      managerName: manager,
+      expected,
+      deposited: input.deposited,
+      method: input.method,
+      reference,
+      comment,
+      notificationTitle: title,
+      notificationBody: body,
+    });
+    if (!result.ok) return null;
+    const { deposit, notification } = result.value;
+    setDemo((current) => ({
+      ...current,
+      deposits: [deposit, ...current.deposits].sort((a, b) => b.day - a.day || b.depositedAt - a.depositedAt),
+      notifications: [notification, ...current.notifications],
+      activity: withActivity(
+        current,
+        manager,
+        `a déclaré un versement de ${formatFcfa(input.deposited)} pour ${input.shop}`,
+        'deposit',
+      ),
+    }));
+    return deposit;
+  }
+
   let created: Deposit | null = null;
-  setDemo((demo) => {
-    const at = nextTime(demo);
-    const expected = cashSalesTotal(demo.sales, input.shop, input.day);
+  setDemo((current) => {
+    const at = nextTime(current);
     const deposit: Deposit = {
       ...input,
-      reference: input.reference.trim(),
-      comment: input.comment.trim(),
+      reference,
+      comment,
       id: `D-${Math.round((TODAY_START - input.day) / DAY)}-${input.shop}`,
       manager,
       expected,
@@ -1030,42 +1093,129 @@ export function declareDeposit(input: DepositInput, manager: string): Deposit {
       note: '',
     };
     created = deposit;
-    const gap = input.deposited - expected;
     return {
-      ...demo,
-      deposits: [deposit, ...demo.deposits].sort((a, b) => b.day - a.day || b.depositedAt - a.depositedAt),
+      ...current,
+      deposits: [deposit, ...current.deposits].sort((a, b) => b.day - a.day || b.depositedAt - a.depositedAt),
       notifications: [
         {
           id: `n-${deposit.id}`,
           kind: 'deposit',
-          title: `Versement à vérifier : ${input.shop}`,
-          body: `${manager} a remis ${formatFcfa(input.deposited)} (${input.method}) pour le ${formatLongDay(input.day).toLowerCase()}${gap < 0 ? `. Il manque ${formatFcfa(-gap)}.` : gap > 0 ? `, ${formatFcfa(gap)} de plus que prévu.` : '.'
-            }`,
+          title,
+          body,
           at,
           read: false,
           href: '/app/versements',
           roles: ['owner'],
         },
-        ...demo.notifications,
+        ...current.notifications,
       ],
       activity: withActivity(
-        demo,
+        current,
         manager,
         `a déclaré un versement de ${formatFcfa(input.deposited)} pour ${input.shop}`,
         'deposit',
       ),
     };
   });
-  return created!;
+  return created;
 }
 
 /** Undo of a declaration that is still waiting for the owner. */
-export function withdrawDeposit(id: string) {
+export async function withdrawDeposit(id: string): Promise<StaffResult<true> | { ok: true; value: true }> {
+  if (remoteShopId) {
+    const result = await withdrawRemoteDeposit(id);
+    if (!result.ok) return result;
+  }
   setDemo((demo) => ({
     ...demo,
     deposits: demo.deposits.filter((deposit) => deposit.id !== id || deposit.status !== 'pending'),
     notifications: demo.notifications.filter((notification) => notification.id !== `n-${id}`),
   }));
+  return { ok: true, value: true };
+}
+
+/** Owner validates or flags a deposit. */
+export async function reviewDeposit(
+  deposit: Deposit,
+  status: Deposit['status'],
+  note: string,
+): Promise<StaffResult<Deposit> | { ok: true; value: Deposit }> {
+  const next = { ...deposit, status, note: note || deposit.note };
+  if (remoteShopId) {
+    const result = await updateRemoteDeposit(deposit.id, { status: next.status, note: next.note });
+    if (!result.ok) return result;
+    setDemo((demo) => ({
+      ...demo,
+      deposits: demo.deposits.map((item) => (item.id === deposit.id ? result.value : item)),
+    }));
+    return result;
+  }
+  setDemo((demo) => ({
+    ...demo,
+    deposits: demo.deposits.map((item) => (item.id === deposit.id ? next : item)),
+  }));
+  return { ok: true, value: next };
+}
+
+export type MemberDraft = Omit<Member, 'id' | 'lastSeen'> & { lastSeen?: number | null };
+
+/** Invites a staff member into the roster (no auth account yet — ADR 0009). */
+export async function inviteMember(
+  draft: MemberDraft,
+  user: string,
+): Promise<StaffResult<Member> | { ok: true; value: Member }> {
+  if (remoteShopId) {
+    const result = await insertRemoteMember(remoteShopId, draft);
+    if (!result.ok) return result;
+    setDemo((demo) => ({
+      ...demo,
+      team: [...demo.team, result.value],
+      activity: withActivity(
+        demo,
+        user,
+        `a invité ${result.value.name} (${ROLES[result.value.role].label.toLowerCase()})`,
+        'team',
+      ),
+    }));
+    return result;
+  }
+  const member: Member = {
+    ...draft,
+    id: `u${Date.now().toString(36)}`,
+    lastSeen: draft.lastSeen ?? null,
+  };
+  setDemo((demo) => ({
+    ...demo,
+    team: [...demo.team, member],
+    activity: withActivity(demo, user, `a invité ${member.name} (${ROLES[member.role].label.toLowerCase()})`, 'team'),
+  }));
+  return { ok: true, value: member };
+}
+
+export async function patchMember(
+  id: string,
+  patch: Partial<Pick<Member, 'role' | 'status' | 'name' | 'phone' | 'shop'>>,
+): Promise<StaffResult<Member> | { ok: true; value: Member }> {
+  if (remoteShopId) {
+    const result = await updateRemoteMember(id, patch);
+    if (!result.ok) return result;
+    setDemo((demo) => ({
+      ...demo,
+      team: demo.team.map((item) => (item.id === id ? result.value : item)),
+    }));
+    return result;
+  }
+  let updated: Member | null = null;
+  setDemo((demo) => ({
+    ...demo,
+    team: demo.team.map((item) => {
+      if (item.id !== id) return item;
+      updated = { ...item, ...patch };
+      return updated;
+    }),
+  }));
+  if (!updated) return { ok: false, error: 'not-found' };
+  return { ok: true, value: updated };
 }
 
 /* ------------------------------------------------------------------ shops */

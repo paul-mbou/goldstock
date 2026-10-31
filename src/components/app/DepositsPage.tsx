@@ -15,7 +15,14 @@ import {
   type DepositStatus,
   type PayId,
 } from '../../data/dashboard';
-import { declareDeposit, logActivity, setDemo, undeclaredDays, useSession, withdrawDeposit } from '../../lib/demo';
+import {
+  declareDeposit,
+  logActivity,
+  reviewDeposit,
+  undeclaredDays,
+  useSession,
+  withdrawDeposit,
+} from '../../lib/demo';
 import { Screen } from './Screen';
 import {
   Badge,
@@ -54,12 +61,6 @@ export default function DepositsPage() {
   );
 }
 
-const replaceDeposit = (deposit: Deposit) =>
-  setDemo((demo) => ({
-    ...demo,
-    deposits: demo.deposits.map((item) => (item.id === deposit.id ? deposit : item)),
-  }));
-
 function Deposits() {
   const { demo, roleId, member } = useSession();
   const canReview = roleId === 'owner';
@@ -80,8 +81,9 @@ function Deposits() {
   const visible = filter === 'all' ? list : list.filter((deposit) => deposit.status === filter);
   const countBy = (status: DepositStatus) => list.filter((deposit) => deposit.status === status).length;
 
-  const decide = (deposit: Deposit, status: DepositStatus, note: string) => {
-    replaceDeposit({ ...deposit, status, note: note || deposit.note });
+  const decide = async (deposit: Deposit, status: DepositStatus, note: string) => {
+    const result = await reviewDeposit(deposit, status, note || deposit.note);
+    if (!result.ok) return;
     logActivity(
       member.name,
       `a ${status === 'verified' ? 'validé' : 'signalé un écart sur'} le versement de ${deposit.shop}`,
@@ -95,7 +97,9 @@ function Deposits() {
       {
         action: {
           label: 'Annuler',
-          run: () => replaceDeposit(deposit),
+          run: () => {
+            void reviewDeposit(deposit, deposit.status, deposit.note);
+          },
         },
       },
     );
@@ -106,7 +110,14 @@ function Deposits() {
     setFilter('all');
     notify(
       `Versement de ${formatFcfa(deposit.deposited)} déclaré.${owner ? ` ${owner.name.split(' ')[0]} va le vérifier.` : ''}`,
-      { action: { label: 'Annuler', run: () => withdrawDeposit(deposit.id) } },
+      {
+        action: {
+          label: 'Annuler',
+          run: () => {
+            void withdrawDeposit(deposit.id);
+          },
+        },
+      },
     );
   };
 
@@ -199,11 +210,10 @@ function Deposits() {
                   >
                     <div className="flex items-center gap-3">
                       <span
-                        className={`grid size-10 shrink-0 place-items-center rounded-xl ${
-                          gap < 0
+                        className={`grid size-10 shrink-0 place-items-center rounded-xl ${gap < 0
                             ? 'bg-red-50 text-red-600 dark:bg-red-400/10 dark:text-red-300'
                             : 'bg-sunken text-ink-soft'
-                        }`}
+                          }`}
                       >
                         {gap < 0 ? (
                           <TriangleAlert className="size-5" aria-hidden="true" />
@@ -282,7 +292,7 @@ function ReviewDialog({
   deposit: Deposit | null;
   canReview: boolean;
   onClose: () => void;
-  onDecide: (deposit: Deposit, status: DepositStatus, note: string) => void;
+  onDecide: (deposit: Deposit, status: DepositStatus, note: string) => void | Promise<void>;
 }) {
   const [note, setNote] = useState('');
   const gap = deposit ? deposit.deposited - deposit.expected : 0;
@@ -345,9 +355,8 @@ function ReviewDialog({
               </div>
             ))}
             <div
-              className={`flex items-center justify-between gap-4 px-4 py-3.5 ${
-                gap < 0 ? 'bg-red-50 dark:bg-red-400/10' : 'bg-emerald-50 dark:bg-emerald-400/10'
-              }`}
+              className={`flex items-center justify-between gap-4 px-4 py-3.5 ${gap < 0 ? 'bg-red-50 dark:bg-red-400/10' : 'bg-emerald-50 dark:bg-emerald-400/10'
+                }`}
             >
               <span className="font-bold text-ink">Écart</span>
               {gap === 0 ? <Badge tone="success">Conforme</Badge> : <Gap value={gap} />}
@@ -432,9 +441,9 @@ function DeclareDialog({
     day === undefined
       ? 0
       : demo.sales.filter(
-          (sale) =>
-            sale.shop === shop && sale.pay === 'cash' && !sale.cancelled && sale.at >= day && sale.at < day + DAY,
-        ).length;
+        (sale) =>
+          sale.shop === shop && sale.pay === 'cash' && !sale.cancelled && sale.at >= day && sale.at < day + DAY,
+      ).length;
   /* Pre-filled with the exact amount until the manager types another one. */
   const amountValue = amount ?? String(expected);
   const deposited = Number(amountValue) || 0;
@@ -450,7 +459,7 @@ function DeclareDialog({
     onClose();
   };
 
-  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+  const submit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (day === undefined) return;
     const found: DeclareErrors = {};
@@ -461,7 +470,7 @@ function DeclareDialog({
     setErrors(found);
     const first = (['amount', 'reference', 'comment'] as const).find((key) => found[key]);
     if (first) return document.getElementById(`declare-${first}`)?.focus();
-    const created = declareDeposit(
+    const created = await declareDeposit(
       {
         shop,
         day,
@@ -472,6 +481,7 @@ function DeclareDialog({
       },
       member.name,
     );
+    if (!created) return;
     close();
     onDeclared(created);
   };
@@ -549,9 +559,8 @@ function DeclareDialog({
           </div>
           <div
             aria-live="polite"
-            className={`flex items-center justify-between gap-4 px-4 py-3 ${
-              gap < 0 ? 'bg-red-50 dark:bg-red-400/10' : gap > 0 ? 'bg-gold-50 dark:bg-gold-400/10' : 'bg-sunken/60'
-            }`}
+            className={`flex items-center justify-between gap-4 px-4 py-3 ${gap < 0 ? 'bg-red-50 dark:bg-red-400/10' : gap > 0 ? 'bg-gold-50 dark:bg-gold-400/10' : 'bg-sunken/60'
+              }`}
           >
             <span className="font-bold text-ink">Écart</span>
             {gap === 0 ? <Badge tone="success">Conforme</Badge> : <Gap value={gap} />}

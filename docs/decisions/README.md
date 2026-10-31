@@ -22,3 +22,4 @@ Lightweight decisions that outlive chat history.
 | 0006 | [Merchant catalogue on Supabase](0006-merchant-catalog-on-supabase.md)                             | Accepted             | 2026-10-30 |
 | 0007 | [Sales, till and invoices on Supabase](0007-sales-on-supabase.md)                                 | Accepted             | 2026-10-30 |
 | 0008 | [Suppliers, receptions and expenses on Supabase](0008-suppliers-receptions-expenses-on-supabase.md) | Accepted           | 2026-10-31 |
+| 0009 | [Team, deposits and notifications on Supabase](0009-team-deposits-notifications-on-supabase.md) | Accepted             | 2026-10-31 |

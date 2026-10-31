@@ -5,16 +5,18 @@
 
 ## Goal of current work
 
-Lot 5 **password reset** (ADR 0010) ready to push. Next when asked: staff auth accounts, multi-shop rows.
+Lot 6 **staff auth** (ADR 0011) ready to commit/push. Next when asked: multi-shop rows.
 
 ## Done since last handoff
 
-- Lots 1–4 on `main`; sales/supply/staff migrations applied.
-- **Lot 5:** forgot-password on `/connexion`, `/reinitialiser-mot-de-passe`, `recovery.html`, helpers in `credentials.ts` + Vitest (29). Browser QA (dev, auth live): oublié → email sent screen; reset without token → « lien ne fonctionne plus ».
+- Lots 1–5 on `main`.
+- **Lot 6:** `shop_members.user_id`/`email`, `is_account_owner`, expanded `is_shop_owner`, `activate_my_membership`, Edge Function `invite-member`, Team invite sheet (email), hydrate role + activate invited, role preview owner-only. Migration `20261031140000_staff_auth.sql` **pushed** to linked project.
 
-## In progress
+## In progress / owner action
 
-- Owner: Redirect URLs + Reset password template in Supabase; SMTP/domain for real mail; Vercel env if prod still demo.
+- Deploy function (CLI returned 403 ACL): `npx supabase functions deploy invite-member --use-api`
+- Live invite QA needs a signed-in owner + SMTP; no local session for browser QA this turn.
+- Redirect URLs / recovery template / SMTP / Vercel env as before.
 
 ## Do not touch
 
@@ -25,9 +27,9 @@ Lot 5 **password reset** (ADR 0010) ready to push. Next when asked: staff auth a
 
 ```bash
 npm test && npm run check && npm run build && npx prettier --check .
-# /connexion → Mot de passe oublié ; /reinitialiser-mot-de-passe (lien email)
+# Owner: /app/equipe → Inviter (email) → staff opens invite mail → /connexion → role from roster
 ```
 
 ## Pointers
 
-- ADR 0010 · `src/lib/auth.ts` · `src/lib/credentials.ts`
+- ADR 0011 · `supabase/functions/invite-member/` · `src/lib/staff/` · `src/lib/demo.ts`

@@ -4,3 +4,7 @@ project_id = "gold_stock"
 # the new publishable keys that are not JWTs.
 [functions.email-otp]
 verify_jwt = false
+
+# The function validates the caller's JWT itself (same pattern as email-otp).
+[functions.invite-member]
+verify_jwt = false

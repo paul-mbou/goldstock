@@ -61,7 +61,9 @@ import {
 } from './sales';
 import {
   declareRemoteDeposit,
-  insertRemoteMember,
+  activateMyMembership,
+  fetchMyMembership,
+  inviteRemoteMember,
   loadStaff,
   markRemoteNotificationsRead,
   updateRemoteDeposit,
@@ -81,6 +83,8 @@ import {
 
 /** Shop id on Supabase while the catalogue is live; null in demo mode. */
 let remoteShopId: string | null = null;
+/** Roster id of the signed-in auth user (remote mode); used so the session shows their row. */
+let sessionMemberId: string | null = null;
 
 export const remoteShopIdOf = () => remoteShopId;
 
@@ -95,8 +99,14 @@ export async function hydrateCatalog(): Promise<CatalogResult<true> | { ok: true
     loadSupply(remoteShopId),
     loadStaff(remoteShopId),
   ]);
+  const mine = staff.ok ? await fetchMyMembership(remoteShopId) : null;
+  const myMember = mine && mine.ok ? mine.value : null;
+  sessionMemberId = myMember?.id ?? null;
+  // Never keep seed `owner` in remote mode without a roster match (staff must not see owner UI).
+  const myRole: RoleId | null = myMember?.role ?? (staff.ok ? 'seller' : null);
   setDemo((demo) => ({
     ...demo,
+    ...(myRole ? { role: myRole } : {}),
     categories: result.value.categories,
     products: result.value.products,
     moves: result.value.moves,
@@ -109,6 +119,17 @@ export async function hydrateCatalog(): Promise<CatalogResult<true> | { ok: true
     deposits: staff.ok ? staff.value.deposits : [],
     notifications: staff.ok ? staff.value.notifications : demo.notifications,
   }));
+  // Mark invited staff as active on first successful hydrate after they signed in.
+  if (myMember?.status === 'invited') {
+    const activated = await activateMyMembership();
+    if (activated.ok && activated.value) {
+      sessionMemberId = activated.value.id;
+      setDemo((demo) => ({
+        ...demo,
+        team: demo.team.map((member) => (member.id === activated.value!.id ? activated.value! : member)),
+      }));
+    }
+  }
   return { ok: true, value: true };
 }
 
@@ -197,6 +218,10 @@ export function resetDemo() {
  * until the owner invites one.
  */
 function memberFor(demo: DemoState, roleId: RoleId): Member {
+  if (sessionMemberId) {
+    const signedIn = demo.team.find((item) => item.id === sessionMemberId);
+    if (signedIn) return signedIn;
+  }
   const match =
     demo.team.find((item) => item.role === roleId && item.status === 'active') ??
     demo.team.find((item) => item.role === roleId && item.status !== 'suspended');
@@ -1157,15 +1182,25 @@ export async function reviewDeposit(
   return { ok: true, value: next };
 }
 
-export type MemberDraft = Omit<Member, 'id' | 'lastSeen'> & { lastSeen?: number | null };
+export type MemberDraft = Omit<Member, 'id' | 'lastSeen' | 'role'> & {
+  lastSeen?: number | null;
+  role: Exclude<Member['role'], 'owner'>;
+  email: string;
+};
 
-/** Invites a staff member into the roster (no auth account yet — ADR 0009). */
+/** Invites a staff member; on Supabase this creates an auth user (ADR 0011). */
 export async function inviteMember(
   draft: MemberDraft,
   user: string,
 ): Promise<StaffResult<Member> | { ok: true; value: Member }> {
   if (remoteShopId) {
-    const result = await insertRemoteMember(remoteShopId, draft);
+    const result = await inviteRemoteMember({
+      name: draft.name,
+      email: draft.email,
+      phone: draft.phone,
+      role: draft.role,
+      shopScope: draft.shop,
+    });
     if (!result.ok) return result;
     setDemo((demo) => ({
       ...demo,
@@ -1191,6 +1226,9 @@ export async function inviteMember(
   }));
   return { ok: true, value: member };
 }
+
+/** True when the signed-in person may preview other roles (owners / demo only). */
+export const canPreviewRoles = (demo: DemoState) => !remoteShopId || demo.role === 'owner';
 
 export async function patchMember(
   id: string,

@@ -22,6 +22,8 @@ describe('mappers', () => {
       name: 'Amina Ngono',
       role: 'manager',
       phone: '+237 6 99 00 00 00',
+      email: 'amina@exemple.com',
+      user_id: 'auth-1',
       shop_scope: 'Akwa',
       status: 'active',
       last_seen: '2026-10-23T12:00:00.000Z',
@@ -29,6 +31,7 @@ describe('mappers', () => {
     const member = mapMember(row);
     expect(member.id).toBe('m1');
     expect(member.role).toBe('manager');
+    expect(member.email).toBe('amina@exemple.com');
     expect(member.shop).toBe('Akwa');
     expect(member.lastSeen).toBe(new Date(row.last_seen!).getTime());
     expect(asRole('nope')).toBe('seller');

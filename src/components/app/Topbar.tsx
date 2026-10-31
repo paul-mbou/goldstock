@@ -33,6 +33,7 @@ import { signOut } from '../../lib/auth';
 import {
   markNotificationsRead,
   resetDemo,
+  canPreviewRoles,
   setRole,
   useSession,
   visibleNotifications,
@@ -373,11 +374,12 @@ function currentScreen(current: string): ScreenId | undefined {
 }
 
 function UserMenu({ current }: { current: string }) {
-  const { member, roleId } = useSession();
+  const { demo, member, roleId } = useSession();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(ref, open, close);
+  const preview = canPreviewRoles(demo);
   const item =
     'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-ink-soft transition hover:bg-sunken hover:text-ink';
 
@@ -417,25 +419,27 @@ function UserMenu({ current }: { current: string }) {
             </div>
           </div>
 
-          <div className="border-b border-line px-1 pt-3 pb-3">
-            <p className="flex items-center gap-2 px-2 text-[0.6875rem] font-bold tracking-[0.12em] text-ink-mute uppercase">
-              <UserCog className="size-3.5" aria-hidden="true" />
-              Voir l’espace en tant que
-            </p>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              {ROLE_IDS.map((role) => (
-                <button
-                  key={role}
-                  type="button"
-                  aria-pressed={role === roleId}
-                  onClick={() => switchRole(role)}
-                  className="h-9 rounded-lg border border-line text-sm font-semibold text-ink-soft transition hover:bg-sunken aria-pressed:border-gold-500 aria-pressed:bg-gold-50 aria-pressed:text-ink dark:aria-pressed:bg-gold-400/10"
-                >
-                  {ROLES[role].label}
-                </button>
-              ))}
+          {preview && (
+            <div className="border-b border-line px-1 pt-3 pb-3">
+              <p className="flex items-center gap-2 px-2 text-[0.6875rem] font-bold tracking-[0.12em] text-ink-mute uppercase">
+                <UserCog className="size-3.5" aria-hidden="true" />
+                Voir l’espace en tant que
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                {ROLE_IDS.map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    aria-pressed={role === roleId}
+                    onClick={() => switchRole(role)}
+                    className="h-9 rounded-lg border border-line text-sm font-semibold text-ink-soft transition hover:bg-sunken aria-pressed:border-gold-500 aria-pressed:bg-gold-50 aria-pressed:text-ink dark:aria-pressed:bg-gold-400/10"
+                  >
+                    {ROLES[role].label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="pt-2">
             <a href="/app/parametres?onglet=profil" className={item}>

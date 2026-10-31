@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { Deposit, Member, Notification, RoleId } from '../../data/dashboard';
 import { isAuthLive } from '../auth';
 import { fetchOwner, fetchShop } from '../shop';
@@ -13,7 +14,15 @@ import {
   type StaffSnapshot,
 } from './types';
 
-export type StaffError = 'not-signed-in' | 'no-shop' | 'failed' | 'not-found';
+export type StaffError =
+  | 'not-signed-in'
+  | 'no-shop'
+  | 'failed'
+  | 'not-found'
+  | 'account-exists'
+  | 'invalid-email'
+  | 'forbidden'
+  | 'invite-failed';
 export type StaffResult<T> = { ok: true; value: T } | { ok: false; error: StaffError };
 
 const fail = <T>(error: StaffError): StaffResult<T> => ({ ok: false, error });
@@ -75,11 +84,24 @@ export async function loadStaff(shopId: string): Promise<StaffResult<StaffSnapsh
 }
 
 async function seedOwner(shopId: string): Promise<StaffResult<MemberRow>> {
-  const [owner, shop] = await Promise.all([fetchOwner(), fetchShop()]);
-  const { data, error } = await getSupabase()
+  const supabase = getSupabase();
+  const [{ data: auth }, owner, shop] = await Promise.all([supabase.auth.getUser(), fetchOwner(), fetchShop()]);
+  const user = auth.user;
+  if (!user) return fail('not-signed-in');
+  // Only the account holder may create the owner roster row (never invited staff).
+  const { data: owned } = await supabase
+    .from('shops')
+    .select('id')
+    .eq('id', shopId)
+    .eq('owner_id', user.id)
+    .maybeSingle();
+  if (!owned) return fail('forbidden');
+  const { data, error } = await supabase
     .from('shop_members')
     .insert({
       shop_id: shopId,
+      user_id: user.id,
+      email: user.email ?? '',
       name: owner?.fullName?.trim() || shop?.name || 'Propriétaire',
       role: 'owner',
       phone: owner?.phone ?? '',
@@ -93,26 +115,65 @@ async function seedOwner(shopId: string): Promise<StaffResult<MemberRow>> {
   return ok(data as MemberRow);
 }
 
-export async function insertRemoteMember(
-  shopId: string,
-  member: Omit<Member, 'id' | 'lastSeen'> & { lastSeen?: number | null },
-): Promise<StaffResult<Member>> {
+/** Roster row for the signed-in auth user in this shop, if any. */
+export async function fetchMyMembership(shopId: string): Promise<StaffResult<Member | null>> {
   if (!isAuthLive) return fail('not-signed-in');
-  const { data, error } = await getSupabase()
+  const supabase = getSupabase();
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError || !auth.user) return fail('not-signed-in');
+  const { data, error } = await supabase
     .from('shop_members')
-    .insert({
-      shop_id: shopId,
-      name: member.name.trim(),
-      role: member.role,
-      phone: member.phone,
-      shop_scope: member.shop,
-      status: member.status,
-      last_seen: member.lastSeen ? new Date(member.lastSeen).toISOString() : null,
-    })
     .select('*')
-    .single();
-  if (error || !data) return fail('failed');
-  return ok(mapMember(data as MemberRow));
+    .eq('shop_id', shopId)
+    .eq('user_id', auth.user.id)
+    .maybeSingle();
+  if (error) return fail('failed');
+  return ok(data ? mapMember(data as MemberRow) : null);
+}
+
+/** Marks the signed-in invited member as active (RPC; staff cannot UPDATE roster rows). */
+export async function activateMyMembership(): Promise<StaffResult<Member | null>> {
+  if (!isAuthLive) return fail('not-signed-in');
+  const { data, error } = await getSupabase().rpc('activate_my_membership');
+  if (error) return fail('failed');
+  return ok(data ? mapMember(data as MemberRow) : null);
+}
+
+/** Invites staff via the Edge Function (creates auth user + shop_members row). */
+export async function inviteRemoteMember(input: {
+  name: string;
+  email: string;
+  phone: string;
+  role: Exclude<RoleId, 'owner'>;
+  shopScope: string;
+}): Promise<StaffResult<Member>> {
+  if (!isAuthLive) return fail('not-signed-in');
+  const { data, error } = await getSupabase().functions.invoke<{ member?: MemberRow; error?: string }>(
+    'invite-member',
+    {
+      body: {
+        name: input.name,
+        email: input.email,
+        phone: input.phone,
+        role: input.role,
+        shopScope: input.shopScope,
+      },
+    },
+  );
+  if (error) {
+    if (error instanceof FunctionsHttpError) {
+      const payload = await (error.context as Response).json().catch(() => ({}));
+      const code = typeof payload.error === 'string' ? payload.error : 'invite-failed';
+      if (code === 'account-exists') return fail('account-exists');
+      if (code === 'invalid-email') return fail('invalid-email');
+      if (code === 'forbidden') return fail('forbidden');
+      if (code === 'not-signed-in') return fail('not-signed-in');
+      return fail('invite-failed');
+    }
+    return fail('failed');
+  }
+  if (!data?.member) return fail('invite-failed');
+  return ok(mapMember(data.member));
 }
 
 export async function updateRemoteMember(

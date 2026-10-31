@@ -28,7 +28,7 @@ import {
   type RoleId,
   type Shop,
 } from '../../data/dashboard';
-import { formatPhone, normalizePhone } from '../../lib/auth';
+import { formatPhone, isAuthLive, normalizeEmail, normalizePhone } from '../../lib/auth';
 import { inviteMember, logActivity, patchMember, useSession } from '../../lib/demo';
 import { PhoneField, TextField } from '../auth/fields';
 import { Screen } from './Screen';
@@ -56,7 +56,7 @@ export default function TeamPage() {
   );
 }
 
-const assignable: RoleId[] = ['manager', 'seller', 'stock'];
+const assignable: Exclude<RoleId, 'owner'>[] = ['manager', 'seller', 'stock'];
 
 const activityIcons: Record<ActivityIcon, LucideIcon> = {
   sale: Receipt,
@@ -158,7 +158,13 @@ function Team() {
                       },
                     });
                   }}
-                  onResend={() => notify(`Invitation renvoyée par SMS à ${member.phone}.`)}
+                  onResend={() =>
+                    notify(
+                      member.email
+                        ? `Le renvoi d’invitation pour ${member.email} arrive bientôt.`
+                        : `Invitation à renvoyer à ${member.phone}.`,
+                    )
+                  }
                 />
               ))}
             </ul>
@@ -257,9 +263,22 @@ function Team() {
           onClose={() => setInviting(false)}
           onInvite={async (draft) => {
             const result = await inviteMember(draft, me.name);
-            if (!result.ok) return;
+            if (!result.ok) {
+              const message =
+                result.error === 'account-exists'
+                  ? 'Cette adresse a déjà un compte GOLDSTOCK.'
+                  : result.error === 'invalid-email'
+                    ? 'Adresse email invalide.'
+                    : 'L’invitation n’a pas pu être envoyée. Réessayez.';
+              notify(message);
+              return;
+            }
             setInviting(false);
-            notify(`Invitation envoyée par SMS à ${result.value.phone}.`);
+            notify(
+              isAuthLive
+                ? `Invitation envoyée à ${result.value.email ?? result.value.phone}.`
+                : `Invitation enregistrée pour ${result.value.name} (mode test).`,
+            );
           }}
         />
       )}
@@ -304,7 +323,9 @@ function MemberRow({
           {isMe && <Badge tone="warning">Vous</Badge>}
         </p>
         <p className="truncate text-sm leading-snug text-ink-mute">
-          {[member.shop === 'Toutes' ? 'Toutes les boutiques' : member.shop, member.phone].filter(Boolean).join(' · ')}
+          {[member.shop === 'Toutes' ? 'Toutes les boutiques' : member.shop, member.email || member.phone]
+            .filter(Boolean)
+            .join(' · ')}
         </p>
       </div>
       <div className="hidden w-36 shrink-0 space-y-0.5 text-sm @2xl:block">
@@ -394,18 +415,27 @@ function InviteDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onInvite: (draft: Omit<Member, 'id' | 'lastSeen'>) => void | Promise<void>;
+  onInvite: (draft: {
+    name: string;
+    email: string;
+    phone: string;
+    role: Exclude<RoleId, 'owner'>;
+    shop: Shop | 'Toutes';
+    status: 'invited';
+  }) => void | Promise<void>;
 }) {
   const { demo } = useSession();
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<RoleId>('seller');
-  const [shop, setShop] = useState<Shop>(demo.shops[0].name);
-  const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
+  const [role, setRole] = useState<Exclude<RoleId, 'owner'>>('seller');
+  const [shop, setShop] = useState<Shop | 'Toutes'>(demo.shops[0].name);
+  const [errors, setErrors] = useState<{ name?: string; email?: string; phone?: string }>({});
   const rights = permissionMatrix.map((row) => ({ label: row.label, value: row.values[role] }));
 
   const reset = () => {
     setName('');
+    setEmail('');
     setPhone('');
     setRole('seller');
     setErrors({});
@@ -413,15 +443,18 @@ function InviteDialog({
 
   const submit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const normalized = normalizePhone(phone);
+    const normalizedPhone = normalizePhone(phone);
+    const normalizedEmail = normalizeEmail(email);
     const next: typeof errors = {};
     if (name.trim().split(/\s+/).length < 2) next.name = 'Indiquez le prénom et le nom.';
-    if (!normalized) next.phone = 'Numéro à 9 chiffres, par exemple 6 77 12 34 56.';
+    if (!normalizedEmail) next.email = 'Adresse email invalide.';
+    if (!normalizedPhone) next.phone = 'Numéro à 9 chiffres, par exemple 6 77 12 34 56.';
     setErrors(next);
-    if (!normalized || Object.keys(next).length) return;
-    const local = normalized.slice(4);
+    if (!normalizedEmail || !normalizedPhone || Object.keys(next).length) return;
+    const local = normalizedPhone.slice(4);
     await onInvite({
       name: name.trim(),
+      email: normalizedEmail,
       phone: `+237 ${local.slice(0, 3)} ${local.slice(3, 5)} ${local.slice(5, 7)} ${local.slice(7)}`,
       role,
       shop,
@@ -437,8 +470,13 @@ function InviteDialog({
         onClose();
         reset();
       }}
+      variant="sheet"
       title="Inviter un membre"
-      description="Il reçoit un SMS pour créer son mot de passe."
+      description={
+        isAuthLive
+          ? 'Il reçoit un email pour créer son mot de passe et rejoindre la boutique.'
+          : 'Mode test : l’invitation reste locale (pas d’email).'
+      }
       footer={
         <>
           <button type="button" className="btn-quiet h-11 px-4" onClick={onClose}>
@@ -459,6 +497,16 @@ function InviteDialog({
           value={name}
           onChange={(event) => setName(event.target.value)}
           error={errors.name}
+        />
+        <TextField
+          id="invite-email"
+          label="Email"
+          type="email"
+          placeholder="estelle@exemple.com"
+          autoComplete="off"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          error={errors.email}
         />
         <PhoneField
           id="invite-phone"

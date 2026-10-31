@@ -406,6 +406,8 @@ export type Member = {
   name: string;
   role: RoleId;
   phone: string;
+  /** Login email when the member has (or will have) an auth account. */
+  email?: string;
   shop: Shop | 'Toutes';
   status: MemberStatus;
   lastSeen: number | null;

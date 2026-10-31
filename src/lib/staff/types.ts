@@ -14,6 +14,8 @@ export type MemberRow = {
   name: string;
   role: string;
   phone: string;
+  email: string;
+  user_id: string | null;
   shop_scope: string;
   status: string;
   last_seen: string | null;
@@ -77,6 +79,7 @@ export function mapMember(row: MemberRow): Member {
     name: row.name,
     role: asRole(row.role),
     phone: row.phone,
+    ...(row.email ? { email: row.email } : {}),
     shop: row.shop_scope,
     status: asMemberStatus(row.status),
     lastSeen: row.last_seen ? new Date(row.last_seen).getTime() : null,

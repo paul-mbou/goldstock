@@ -1,7 +1,9 @@
 export {
+  activateMyMembership,
   declareRemoteDeposit,
-  insertRemoteMember,
+  fetchMyMembership,
   insertRemoteNotification,
+  inviteRemoteMember,
   loadStaff,
   markRemoteNotificationsRead,
   updateRemoteDeposit,

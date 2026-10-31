@@ -149,7 +149,7 @@ Tant que `PUBLIC_SUPABASE_URL` et `PUBLIC_SUPABASE_PUBLISHABLE_KEY` ne sont pas 
    - **activer « Confirm email »** tant que le code email est en pause (ADR 0005) ;
    - mettre la longueur minimale du mot de passe à **8**.
 
-   Puis dans _Authentication → URL Configuration_ : _Site URL_ = l'adresse du site en ligne, et dans _Redirect URLs_ ajouter `http://localhost:*/confirmer-email` et `https://<site>/confirmer-email`. Dans _Authentication → Emails → Confirm signup_, coller `supabase/templates/confirm-signup.html` (objet : « Confirmez votre adresse GOLDSTOCK »).
+   Puis dans _Authentication → URL Configuration_ : _Site URL_ = l'adresse du site en ligne, et dans _Redirect URLs_ ajouter `http://localhost:*/confirmer-email`, `http://localhost:*/reinitialiser-mot-de-passe`, `https://<site>/confirmer-email` et `https://<site>/reinitialiser-mot-de-passe`. Dans _Authentication → Emails → Confirm signup_, coller `supabase/templates/confirm-signup.html` (objet : « Confirmez votre adresse GOLDSTOCK »). Dans _Reset password_, coller `supabase/templates/recovery.html` (objet : « Réinitialisez votre mot de passe GOLDSTOCK »).
 
    Sans domaine, l'envoi intégré de Supabase ne livre qu'aux membres de l'équipe Supabase, quelques emails par heure : pour de vrais clients, configurer un SMTP (_Authentication → Emails → SMTP Settings_).
 

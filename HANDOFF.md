@@ -5,41 +5,29 @@
 
 ## Goal of current work
 
-Dashboard → Supabase batches 1–4 are **done and on `main`**. Next work only when the owner asks (staff auth, password reset, multi-shop rows, payments…).
+Lot 5 **password reset** (ADR 0010) ready to push. Next when asked: staff auth accounts, multi-shop rows.
 
 ## Done since last handoff
 
-| Lot | Commit    | Scope                                           |
-| --- | --------- | ----------------------------------------------- |
-| 1   | `448f70d` | Catalogue (ADR 0006)                            |
-| 2   | `f7de8c9` | Ventes / caisse / factures (ADR 0007)           |
-| 3   | `4ebcaeb` | Fournisseurs / réceptions / dépenses (ADR 0008) |
-| 4   | `0ca2f36` | Équipe / versements / notifications (ADR 0009)  |
-
-Shared store still feeds islands; live mode hydrates + dual-writes. Demo mode (no env) unchanged.
+- Lots 1–4 on `main`; sales/supply/staff migrations applied.
+- **Lot 5:** forgot-password on `/connexion`, `/reinitialiser-mot-de-passe`, `recovery.html`, helpers in `credentials.ts` + Vitest (29). Browser QA (dev, auth live): oublié → email sent screen; reset without token → « lien ne fonctionne plus ».
 
 ## In progress
 
-- Migrations sales + supply + staff **applied** on `snwlfrnlcamxyaqvqyye` (2026-10-31 `db push`; catalogue was already there).
-- Owner still: Vercel `PUBLIC_SUPABASE_*` (or `NEXT_PUBLIC_*`) at build time + redeploy if production is still test mode; Confirm email on; Secure password change; Redirect URLs; email template; SMTP/domain when ready for real customers.
+- Owner: Redirect URLs + Reset password template in Supabase; SMTP/domain for real mail; Vercel env if prod still demo.
 
 ## Do not touch
 
-- `src/data/site.ts` prices, phone and WhatsApp number.
+- `src/data/site.ts` prices / phone / WhatsApp.
 - `.env.local`, `.vercel/`.
-
-## Blockers / open questions
-
-- No sending domain → built-in mailer rate-limits.
-- Fixed dashboard clock (`NOW` in `dashboard.ts`).
-- Invited staff cannot sign in yet (roster only).
 
 ## How to validate
 
 ```bash
 npm test && npm run check && npm run build && npx prettier --check .
+# /connexion → Mot de passe oublié ; /reinitialiser-mot-de-passe (lien email)
 ```
 
 ## Pointers
 
-- Contract: `AGENTS.md` · Product: `docs/PRODUCT.md` · ADRs: `docs/decisions/` (0006–0009)
+- ADR 0010 · `src/lib/auth.ts` · `src/lib/credentials.ts`

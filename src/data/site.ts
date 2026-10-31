@@ -8,6 +8,7 @@ export const site = {
   signupUrl: '/essai-gratuit',
   loginUrl: '/connexion',
   confirmEmailUrl: '/confirmer-email',
+  resetPasswordUrl: '/reinitialiser-mot-de-passe',
   trialDays: 7,
   whatsappNumber: '18733000708',
   supportPhone: '+1 (873) 300-0708',

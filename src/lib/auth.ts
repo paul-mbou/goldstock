@@ -8,9 +8,28 @@ import {
 import type { BusinessId } from '../data/businesses';
 import { site } from '../data/site';
 import { saveDemoSetup } from './demo-setup';
+import {
+  displayPhone,
+  formatPhone,
+  isRecoveryLink,
+  MIN_PASSWORD_LENGTH,
+  normalizeEmail,
+  normalizePhone,
+  passwordIssue,
+} from './credentials';
 import { fetchOwner, fetchShop } from './shop';
 import { getSupabase, isSupabaseConfigured, setRememberDevice } from './supabase';
 import { resetTour } from './tour';
+
+export {
+  displayPhone,
+  formatPhone,
+  isRecoveryLink,
+  MIN_PASSWORD_LENGTH,
+  normalizeEmail,
+  normalizePhone,
+  passwordIssue,
+};
 
 /** False while Supabase is not configured: login and signup then open the demo dashboard (ADR 0002). */
 export const isAuthLive = isSupabaseConfigured;
@@ -93,6 +112,9 @@ function authErrorOf(error: SupabaseAuthError): AuthError {
 
 /** Where the confirmation link lands; it must be listed in Supabase → Authentication → URL Configuration. */
 const confirmUrl = () => new URL(site.confirmEmailUrl, window.location.origin).href;
+
+/** Where the password-recovery link lands; must also be listed in Redirect URLs. */
+const resetPasswordUrl = () => new URL(site.resetPasswordUrl, window.location.origin).href;
 
 /**
  * The merchant space stays closed until the address is confirmed. Supabase "Confirm email" already
@@ -284,6 +306,97 @@ export type PasswordError =
 export type PasswordResult = { ok: true } | { ok: false; error: PasswordError };
 
 /**
+ * Emails a one-time recovery link. Always reports success for an unknown address so accounts
+ * cannot be probed (Supabase already does that server-side).
+ */
+export async function requestPasswordReset(email: string): Promise<ResendResult> {
+  if (!isAuthLive) {
+    await demoDelay();
+    return { ok: true };
+  }
+  const { error } = await getSupabase().auth.resetPasswordForEmail(email, {
+    redirectTo: resetPasswordUrl(),
+  });
+  if (!error) return { ok: true };
+  const reason = authErrorOf(error);
+  return { ok: false, error: reason === 'rate-limited' || reason === 'network' ? reason : 'unknown' };
+}
+
+/**
+ * Opens the session from a recovery link (`token_hash` + type=recovery, hash tokens, or PKCE code).
+ * Call this once on `/reinitialiser-mot-de-passe` before asking for the new password.
+ */
+export async function completePasswordRecovery(): Promise<ConfirmResult> {
+  if (!isAuthLive) return { ok: true, next: 'app' };
+
+  const query = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.slice(1));
+  window.history.replaceState(null, '', window.location.pathname);
+
+  const linkError = query.get('error_code') ?? hash.get('error_code');
+  if (linkError) return { ok: false, error: linkError === 'otp_expired' ? 'expired' : 'invalid' };
+
+  const supabase = getSupabase();
+  setRememberDevice(true);
+
+  const tokenHash = query.get('token_hash');
+  const accessToken = hash.get('access_token');
+  const refreshToken = hash.get('refresh_token');
+  const code = query.get('code');
+
+  let error: SupabaseAuthError | null = null;
+  if (tokenHash) {
+    if (!isRecoveryLink(query, hash)) return { ok: false, error: 'invalid' };
+    ({ error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }));
+  } else if (accessToken && refreshToken) {
+    if (hash.get('type') && !isRecoveryLink(query, hash)) return { ok: false, error: 'invalid' };
+    ({ error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }));
+  } else if (code) {
+    ({ error } = await supabase.auth.exchangeCodeForSession(code));
+  } else {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return { ok: false, error: 'invalid' };
+  }
+
+  if (error) {
+    const reason = authErrorOf(error);
+    if (reason === 'network') return { ok: false, error: 'network' };
+    return { ok: false, error: error.code === 'otp_expired' ? 'expired' : 'invalid' };
+  }
+
+  const { data, error: userError } = await supabase.auth.getUser();
+  if (userError || !data.user) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return { ok: false, error: 'invalid' };
+  }
+  return { ok: true, next: 'app' };
+}
+
+/** Sets the new password after `completePasswordRecovery`, then signs other devices out. */
+export async function setRecoveredPassword(next: string): Promise<PasswordResult> {
+  if (passwordIssue(next)) return { ok: false, error: 'weak-password' };
+  if (!isAuthLive) {
+    await demoDelay();
+    return { ok: true };
+  }
+  const supabase = getSupabase();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) return { ok: false, error: 'unknown' };
+
+  const { error } = await supabase.auth.updateUser({ password: next });
+  if (error) {
+    if (error.code === 'same_password') return { ok: false, error: 'same-password' };
+    const reason = authErrorOf(error);
+    return {
+      ok: false,
+      error: reason === 'weak-password' || reason === 'rate-limited' || reason === 'network' ? reason : 'unknown',
+    };
+  }
+  await supabase.auth.signOut({ scope: 'others' });
+  return { ok: true };
+}
+
+/**
  * Checks the current password via `current_password` (keeps the same session_id, so the emailed
  * code step is not lost when EMAIL_CODE_ENABLED is back on), then signs every other device out.
  * Requires « Secure password change » in Supabase → Authentication → Providers → Email.
@@ -339,29 +452,3 @@ export async function getAuthState(): Promise<AuthState> {
 export async function signOut() {
   if (isAuthLive) await getSupabase().auth.signOut();
 }
-
-export function normalizeEmail(value: string) {
-  const email = value.trim().toLowerCase();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) ? email : null;
-}
-
-/** Cameroonian numbers: 9 digits, mobile (6…) or landline (2…). Accepts +237/00237 prefixes and spaces. */
-export function normalizePhone(value: string) {
-  const digits = value.replace(/\D/g, '').replace(/^(00)?237(?=\d{9}$)/, '');
-  return /^[26]\d{8}$/.test(digits) ? `+237${digits}` : null;
-}
-
-/** Formats the 9 local digits as "6 XX XX XX XX", dropping a pasted country code. */
-export const formatPhone = (value: string) =>
-  value
-    .replace(/\D/g, '')
-    .replace(/^(00)?237(?=\d{9})/, '')
-    .slice(0, 9)
-    .replace(/^(\d)(\d{0,2})(\d{0,2})(\d{0,2})(\d{0,2})$/, (_, a, b, c, d, e) =>
-      [a, b, c, d, e].filter(Boolean).join(' '),
-    );
-
-/** "+237699412208" → "+237 6 99 41 22 08", as phone numbers are shown in the merchant space. */
-export const displayPhone = (phone: string) => `+237 ${formatPhone(phone)}`;
-
-export const MIN_PASSWORD_LENGTH = 8;

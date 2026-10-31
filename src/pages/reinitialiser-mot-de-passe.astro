@@ -1,0 +1,17 @@
+---
+import ResetPasswordForm from '../components/auth/ResetPasswordForm';
+import { site } from '../data/site';
+import AuthLayout from '../layouts/AuthLayout.astro';
+---
+
+<AuthLayout
+  title={`Nouveau mot de passe — ${site.name}`}
+  description="Choisissez un nouveau mot de passe pour votre compte GOLDSTOCK."
+  noindex
+  referrerPolicy="no-referrer"
+  asideTitle="Retrouvez l’accès à votre boutique."
+  asideText="Le lien reçu par email ne sert qu’une fois. Après le changement, reconnectez-vous avec le nouveau mot de passe."
+  points={['Lien valable une seule fois', 'Autres appareils déconnectés', 'Assistance WhatsApp si besoin']}
+>
+  <ResetPasswordForm client:load />
+</AuthLayout>

@@ -100,7 +100,7 @@ Astro documentation: https://docs.astro.build. Consult these guides before worki
 ## Out of scope for agents
 
 - Real payments, unless the owner asks.
-- Staff auth accounts, multi-shop as real Supabase rows, or password reset, unless the owner asks (batches 1–4 / ADR 0006–0009 are done).
+- Staff auth accounts or multi-shop as real Supabase rows, unless the owner asks (batches 1–4 + password reset ADR 0010 are done).
 - Changing Supabase dashboard settings, secrets or production data.
 - Changing prices, plans, support phone or WhatsApp number in `src/data/site.ts` without the owner asking.
 - Changing the Vercel project or production environment variables.

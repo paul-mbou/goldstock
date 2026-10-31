@@ -4,6 +4,7 @@ import { site, whatsappUrl } from '../../data/site';
 import { getAuthState, isAuthLive, login, normalizeEmail, type AuthError } from '../../lib/auth';
 import { CheckEmailStep } from './CheckEmailStep';
 import { EmailCodeStep } from './EmailCodeStep';
+import { ForgotPasswordForm } from './ForgotPasswordForm';
 import { FormAlert, PasswordField, TextField } from './fields';
 
 type Values = { email: string; password: string; remember: boolean };
@@ -46,6 +47,7 @@ export default function LoginForm() {
   const [codeEmail, setCodeEmail] = useState<string | null>(null);
   /** Set when the password is right but the address was never confirmed. */
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);
 
   useEffect(() => {
     if (!isAuthLive) return;
@@ -96,6 +98,18 @@ export default function LoginForm() {
         onBack={() => {
           setConfirmEmail(null);
           update('password', '');
+        }}
+      />
+    );
+  }
+
+  if (forgot) {
+    return (
+      <ForgotPasswordForm
+        initialEmail={values.email}
+        onBack={() => {
+          setForgot(false);
+          setServerError(null);
         }}
       />
     );
@@ -156,14 +170,13 @@ export default function LoginForm() {
         onChange={(event) => update('password', event.target.value)}
         onBlur={() => setTouched((current) => ({ ...current, password: true }))}
         aside={
-          <a
-            href={whatsappUrl("Bonjour, j'ai oublié mon mot de passe GOLDSTOCK.")}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
             className="text-sm font-semibold text-gold-700 hover:text-gold-600"
+            onClick={() => setForgot(true)}
           >
             Mot de passe oublié&nbsp;?
-          </a>
+          </button>
         }
       />
 

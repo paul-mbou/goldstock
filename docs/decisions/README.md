@@ -19,3 +19,6 @@ Lightweight decisions that outlive chat history.
 | 0003 | [One line of business per shop](0003-one-line-of-business-per-shop.md)                            | Accepted             | 2026-10-24 |
 | 0004 | [Supabase for login and signup, with an emailed code](0004-supabase-auth-with-email-code.md)      | Paused by 0005       | 2026-10-24 |
 | 0005 | [Email confirmation link instead of the sign-in code](0005-email-confirmation-instead-of-code.md) | Accepted (temporary) | 2026-10-24 |
+| 0006 | [Merchant catalogue on Supabase](0006-merchant-catalog-on-supabase.md)                             | Accepted             | 2026-10-30 |
+| 0007 | [Sales, till and invoices on Supabase](0007-sales-on-supabase.md)                                 | Accepted             | 2026-10-30 |
+| 0008 | [Suppliers, receptions and expenses on Supabase](0008-suppliers-receptions-expenses-on-supabase.md) | Accepted           | 2026-10-31 |

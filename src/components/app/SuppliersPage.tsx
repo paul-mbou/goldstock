@@ -1,7 +1,7 @@
 import { MapPin, PackagePlus, Phone, Plus, Trash2, Truck, UserRound } from 'lucide-react';
 import { useEffect, useState, type SubmitEvent } from 'react';
 import { formatFcfa, formatNumber, formatWhen, type Supplier } from '../../data/dashboard';
-import { flatItems, logActivity, receiveGoods, setDemo, useSession } from '../../lib/demo';
+import { flatItems, receiveGoods, saveSupplier, useSession } from '../../lib/demo';
 import { Screen } from './Screen';
 import {
   Card,
@@ -165,12 +165,12 @@ function Suppliers() {
       <NewSupplierDialog
         open={creating}
         onClose={() => setCreating(false)}
-        onCreate={(supplier) => {
-          setDemo((current) => ({ ...current, suppliers: [...current.suppliers, supplier] }));
-          logActivity(member.name, `a ajouté le fournisseur ${supplier.name}`, 'edit');
+        onCreate={async (draft) => {
+          const result = await saveSupplier(draft, member.name);
+          if (!result.ok) return;
           setCreating(false);
           setView('list');
-          notify(`${supplier.name} ajouté à vos fournisseurs.`);
+          notify(`${result.value.name} ajouté à vos fournisseurs.`);
         }}
       />
       {region}
@@ -208,9 +208,9 @@ function ReceptionForm({
       current.some((line) => line.vid === presetItem)
         ? current
         : [
-            ...current,
-            { vid: presetItem, qty: Math.max(1, item.product.min * 2 - item.variant.stock), cost: item.variant.cost },
-          ],
+          ...current,
+          { vid: presetItem, qty: Math.max(1, item.product.min * 2 - item.variant.stock), cost: item.variant.cost },
+        ],
     );
     const match = demo.suppliers.find((supplier) => supplier.category === item.category?.name);
     if (match && !initialSupplier) setSupplierId(match.id);
@@ -230,10 +230,11 @@ function ReceptionForm({
   const total = lines.reduce((sum, line) => sum + line.qty * line.cost, 0);
   const qty = lines.reduce((sum, line) => sum + line.qty, 0);
 
-  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+  const submit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!lines.length) return setError('Ajoutez au moins un article reçu.');
-    const id = receiveGoods({ supplierId, reference, lines }, userName);
+    const id = await receiveGoods({ supplierId, reference, lines }, userName);
+    if (!id) return setError('La réception n’a pas pu être enregistrée. Réessayez.');
     onDone(id, qty);
   };
 
@@ -418,7 +419,7 @@ function NewSupplierDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onCreate: (supplier: Supplier) => void;
+  onCreate: (draft: Omit<Supplier, 'id' | 'total'>) => void | Promise<void>;
 }) {
   const { demo } = useSession();
   const [form, setForm] = useState(emptySupplier);
@@ -426,17 +427,15 @@ function NewSupplierDialog({
   const set = (key: keyof typeof emptySupplier) => (event: { target: { value: string } }) =>
     setForm((current) => ({ ...current, [key]: event.target.value }));
 
-  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+  const submit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (form.name.trim().length < 2) return setError('Indiquez le nom du fournisseur.');
-    onCreate({
-      id: `s${Date.now().toString(36)}`,
+    await onCreate({
       name: form.name.trim(),
       contact: form.contact.trim() || '—',
       phone: form.phone.trim() || '—',
       city: form.city.trim() || 'Douala',
       category: form.category || demo.categories[0]?.name || '',
-      total: 0,
     });
     setForm(emptySupplier);
     setError('');

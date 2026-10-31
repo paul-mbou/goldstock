@@ -108,11 +108,17 @@ function Expenses() {
   const margin = summarize(between(monthSales, MONTH_START, Infinity)).margin;
   const cash = sum(month.filter((expense) => expense.pay === 'cash'));
 
-  const remove = (expense: Expense) => {
-    deleteExpense(expense.id, member.name);
+  const remove = async (expense: Expense) => {
+    const result = await deleteExpense(expense.id, member.name);
+    if (!result.ok) return;
     setOpenId(null);
     notify(`Dépense « ${expense.reason} » supprimée.`, {
-      action: { label: 'Annuler', run: () => restoreExpense(expense) },
+      action: {
+        label: 'Annuler',
+        run: () => {
+          void restoreExpense(expense);
+        },
+      },
     });
   };
 
@@ -378,8 +384,8 @@ function ExpenseDialog({
   const people = demo.team.filter((item) => item.status !== 'suspended');
   const set =
     <K extends keyof ReturnType<typeof blank>>(key: K) =>
-    (value: ReturnType<typeof blank>[K]) =>
-      setForm((current) => ({ ...current, [key]: value }));
+      (value: ReturnType<typeof blank>[K]) =>
+        setForm((current) => ({ ...current, [key]: value }));
 
   const close = () => {
     setForm(blank());
@@ -387,7 +393,7 @@ function ExpenseDialog({
     onClose();
   };
 
-  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+  const submit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const amount = Number(form.amount) || 0;
     const found: Errors = {};
@@ -398,7 +404,7 @@ function ExpenseDialog({
     setErrors(found);
     const first = (['reason', 'amount', 'day'] as const).find((key) => found[key]);
     if (first) return document.getElementById(`expense-${first}`)?.focus();
-    const created = recordExpense(
+    const created = await recordExpense(
       {
         reason: form.reason,
         amount,
@@ -411,6 +417,7 @@ function ExpenseDialog({
       },
       member.name,
     );
+    if (!created) return;
     setForm(blank());
     onCreated(created);
   };

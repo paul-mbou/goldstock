@@ -36,6 +36,7 @@ import {
   type ScreenId,
   type Shop,
   type ShopIdentity,
+  type Supplier,
   type Variant,
 } from '../data/dashboard';
 import { isAuthLive } from './auth';
@@ -58,26 +59,38 @@ import {
   setRemoteSaleCancelled,
   type SalesResult,
 } from './sales';
+import {
+  deleteRemoteExpense,
+  insertRemoteExpense,
+  insertRemoteSupplier,
+  loadSupply,
+  nextCodedId,
+  receiveRemoteGoods,
+  type SupplyResult,
+} from './supply';
 
 /** Shop id on Supabase while the catalogue is live; null in demo mode. */
 let remoteShopId: string | null = null;
 
 export const remoteShopIdOf = () => remoteShopId;
 
-/** Replaces categories, products, stock moves and sales with the account's Supabase data. */
+/** Replaces catalogue, sales, suppliers, receptions and expenses with the account's Supabase data. */
 export async function hydrateCatalog(): Promise<CatalogResult<true> | { ok: true; value: true }> {
   if (!isAuthLive) return { ok: true, value: true };
   const result = await loadCatalog();
   if (!result.ok) return result;
   remoteShopId = result.value.shopId;
-  const sales = await loadSales(remoteShopId);
+  const [sales, supply] = await Promise.all([loadSales(remoteShopId), loadSupply(remoteShopId)]);
   setDemo((demo) => ({
     ...demo,
     categories: result.value.categories,
     products: result.value.products,
     moves: result.value.moves,
-    // Soft-fail if the sales migration is missing: empty list, not seed sales with stale ids.
+    // Soft-fail if a later migration is missing: empty lists, not seed rows with stale ids.
     sales: sales.ok ? sales.value : [],
+    suppliers: supply.ok ? supply.value.suppliers : [],
+    receptions: supply.ok ? supply.value.receptions : [],
+    expenses: supply.ok ? supply.value.expenses : [],
   }));
   return { ok: true, value: true };
 }
@@ -376,11 +389,6 @@ const shiftStock = (products: Product[], deltas: Record<string, number>) =>
       }
       : product,
   );
-
-const nextId = (ids: string[], prefix: string, pad = 0) => {
-  const max = Math.max(0, ...ids.map((id) => Number(id.replace(/\D/g, '')) || 0));
-  return `${prefix}${String(max + 1).padStart(pad, '0')}`;
-};
 
 export type SaleInput = {
   shop: Shop;
@@ -820,33 +828,115 @@ export async function saveProductStatus(product: Product, status: Product['statu
   return result;
 }
 
-export function receiveGoods(
+export type SupplierDraft = Omit<Supplier, 'id' | 'total'>;
+
+/** Adds a supplier; on Supabase the id is the row uuid. */
+export async function saveSupplier(
+  draft: SupplierDraft,
+  user: string,
+): Promise<SupplyResult<Supplier> | { ok: true; value: Supplier }> {
+  if (remoteShopId) {
+    const result = await insertRemoteSupplier(remoteShopId, draft);
+    if (!result.ok) return result;
+    setDemo((demo) => ({
+      ...demo,
+      suppliers: [...demo.suppliers, result.value],
+      activity: withActivity(demo, user, `a ajouté le fournisseur ${result.value.name}`, 'edit'),
+    }));
+    return result;
+  }
+
+  const supplier: Supplier = {
+    ...draft,
+    id: `s${Date.now().toString(36)}`,
+    total: 0,
+  };
+  setDemo((demo) => ({
+    ...demo,
+    suppliers: [...demo.suppliers, supplier],
+    activity: withActivity(demo, user, `a ajouté le fournisseur ${supplier.name}`, 'edit'),
+  }));
+  return { ok: true, value: supplier };
+}
+
+export async function receiveGoods(
   input: { supplierId: string; reference: string; lines: { vid: string; qty: number; cost: number }[] },
   user: string,
-) {
-  let receptionId = '';
-  setDemo((demo) => {
-    const supplier = demo.suppliers.find((item) => item.id === input.supplierId)!;
-    const items = flatItems(demo, { activeOnly: false });
-    const at = nextTime(demo);
-    const total = input.lines.reduce((sum, line) => sum + line.qty * line.cost, 0);
-    const qty = input.lines.reduce((sum, line) => sum + line.qty, 0);
-    receptionId = nextId(
-      demo.receptions.map((reception) => reception.id),
-      'R-',
-      4,
-    );
+): Promise<string | null> {
+  const demo = getSnapshot();
+  const supplier = demo.suppliers.find((item) => item.id === input.supplierId);
+  if (!supplier || !input.lines.length) return null;
+  const items = flatItems(demo, { activeOnly: false });
+  const total = input.lines.reduce((sum, line) => sum + line.qty * line.cost, 0);
+  const qty = input.lines.reduce((sum, line) => sum + line.qty, 0);
+  const code = nextCodedId(
+    demo.receptions.map((reception) => reception.id),
+    'R-',
+    4,
+  );
+
+  if (remoteShopId) {
+    const result = await receiveRemoteGoods({
+      shopId: remoteShopId,
+      code,
+      supplierId: input.supplierId,
+      reference: input.reference.trim(),
+      userName: user,
+      lines: input.lines.map((line) => ({ variantId: line.vid, qty: line.qty, cost: line.cost })),
+    });
+    if (!result.ok) return null;
+    const reception = result.value;
     const costs = Object.fromEntries(input.lines.map((line) => [line.vid, line.cost]));
-    const products = shiftStock(demo.products, Object.fromEntries(input.lines.map((line) => [line.vid, line.qty]))).map(
-      (product) => ({
+    const at = reception.at;
+    setDemo((current) => ({
+      ...current,
+      products: shiftStock(
+        current.products,
+        Object.fromEntries(input.lines.map((line) => [line.vid, line.qty])),
+      ).map((product) => ({
         ...product,
         variants: product.variants.map((variant) =>
           costs[variant.id] ? { ...variant, cost: costs[variant.id] } : variant,
         ),
-      }),
-    );
+      })),
+      receptions: [reception, ...current.receptions],
+      suppliers: current.suppliers.map((item) =>
+        item.id === supplier.id ? { ...item, total: item.total + total } : item,
+      ),
+      moves: [
+        ...input.lines.map((line, index) => ({
+          id: `m${at}${index}`,
+          at,
+          type: 'reception' as const,
+          item: items.find((item) => item.variant.id === line.vid)!.full,
+          qty: line.qty,
+          user,
+          note: `Réception ${reception.id}`,
+          source: supplier.name,
+        })),
+        ...current.moves,
+      ],
+      activity: withActivity(current, user, `a réceptionné ${qty} article(s) de ${supplier.name}`, 'reception'),
+    }));
+    return reception.id;
+  }
+
+  let receptionId = '';
+  setDemo((current) => {
+    const at = nextTime(current);
+    receptionId = code;
+    const costs = Object.fromEntries(input.lines.map((line) => [line.vid, line.cost]));
+    const products = shiftStock(
+      current.products,
+      Object.fromEntries(input.lines.map((line) => [line.vid, line.qty])),
+    ).map((product) => ({
+      ...product,
+      variants: product.variants.map((variant) =>
+        costs[variant.id] ? { ...variant, cost: costs[variant.id] } : variant,
+      ),
+    }));
     return {
-      ...demo,
+      ...current,
       products,
       receptions: [
         {
@@ -859,9 +949,9 @@ export function receiveGoods(
           total,
           user,
         },
-        ...demo.receptions,
+        ...current.receptions,
       ],
-      suppliers: demo.suppliers.map((item) =>
+      suppliers: current.suppliers.map((item) =>
         item.id === supplier.id ? { ...item, total: item.total + total } : item,
       ),
       moves: [
@@ -875,9 +965,9 @@ export function receiveGoods(
           note: `Réception ${receptionId}`,
           source: supplier.name,
         })),
-        ...demo.moves,
+        ...current.moves,
       ],
-      activity: withActivity(demo, user, `a réceptionné ${qty} article(s) de ${supplier.name}`, 'reception'),
+      activity: withActivity(current, user, `a réceptionné ${qty} article(s) de ${supplier.name}`, 'reception'),
     };
   });
   return receptionId;
@@ -1017,54 +1107,88 @@ export const visibleExpenses = ({ demo, roleId, member }: Session) =>
 
 export type ExpenseInput = Omit<Expense, 'id' | 'recordedBy' | 'recordedAt'>;
 
-export function recordExpense(input: ExpenseInput, user: string): Expense {
-  let created: Expense | null = null;
-  setDemo((demo) => {
-    created = {
-      ...input,
-      reason: input.reason.trim(),
-      note: input.note.trim(),
-      id: nextId(
-        demo.expenses.map((expense) => expense.id),
-        'E-',
-        4,
-      ),
-      recordedBy: user,
-      recordedAt: nextTime(demo),
-    };
-    return {
-      ...demo,
-      expenses: [created, ...demo.expenses].sort((a, b) => b.day - a.day || b.recordedAt - a.recordedAt),
+export async function recordExpense(input: ExpenseInput, user: string): Promise<Expense | null> {
+  const demo = getSnapshot();
+  const created: Expense = {
+    ...input,
+    reason: input.reason.trim(),
+    note: input.note.trim(),
+    id: nextCodedId(
+      demo.expenses.map((expense) => expense.id),
+      'E-',
+      4,
+    ),
+    recordedBy: user,
+    recordedAt: nextTime(demo),
+  };
+
+  if (remoteShopId) {
+    const result = await insertRemoteExpense(remoteShopId, created);
+    if (!result.ok) return null;
+    setDemo((current) => ({
+      ...current,
+      expenses: [result.value, ...current.expenses].sort((a, b) => b.day - a.day || b.recordedAt - a.recordedAt),
       activity: withActivity(
-        demo,
+        current,
         user,
-        `a enregistré une dépense de ${formatFcfa(input.amount)} (${created.reason})`,
+        `a enregistré une dépense de ${formatFcfa(input.amount)} (${result.value.reason})`,
         'expense',
       ),
-    };
-  });
-  return created!;
+    }));
+    return result.value;
+  }
+
+  setDemo((current) => ({
+    ...current,
+    expenses: [created, ...current.expenses].sort((a, b) => b.day - a.day || b.recordedAt - a.recordedAt),
+    activity: withActivity(
+      current,
+      user,
+      `a enregistré une dépense de ${formatFcfa(input.amount)} (${created.reason})`,
+      'expense',
+    ),
+  }));
+  return created;
 }
 
-export function deleteExpense(id: string, user: string) {
-  setDemo((demo) => {
-    const expense = demo.expenses.find((item) => item.id === id);
-    if (!expense) return demo;
-    return {
+export async function deleteExpense(
+  id: string,
+  user: string,
+): Promise<SupplyResult<true> | { ok: true; value: true }> {
+  const expense = getSnapshot().expenses.find((item) => item.id === id);
+  if (!expense) return { ok: true, value: true };
+
+  if (remoteShopId) {
+    const result = await deleteRemoteExpense(id);
+    if (!result.ok) return result;
+  }
+
+  setDemo((demo) => ({
+    ...demo,
+    expenses: demo.expenses.filter((item) => item.id !== id),
+    activity: withActivity(demo, user, `a supprimé la dépense « ${expense.reason} »`, 'expense'),
+  }));
+  return { ok: true, value: true };
+}
+
+export async function restoreExpense(
+  expense: Expense,
+): Promise<SupplyResult<true> | { ok: true; value: true }> {
+  if (getSnapshot().expenses.some((item) => item.id === expense.id)) return { ok: true, value: true };
+
+  if (remoteShopId) {
+    const result = await insertRemoteExpense(remoteShopId, expense);
+    if (!result.ok) return result;
+    setDemo((demo) => ({
       ...demo,
-      expenses: demo.expenses.filter((item) => item.id !== id),
-      activity: withActivity(demo, user, `a supprimé la dépense « ${expense.reason} »`, 'expense'),
-    };
-  });
-}
+      expenses: [...demo.expenses, result.value].sort((a, b) => b.day - a.day || b.recordedAt - a.recordedAt),
+    }));
+    return { ok: true, value: true };
+  }
 
-export function restoreExpense(expense: Expense) {
-  setDemo((demo) =>
-    demo.expenses.some((item) => item.id === expense.id)
-      ? demo
-      : {
-        ...demo,
-        expenses: [...demo.expenses, expense].sort((a, b) => b.day - a.day || b.recordedAt - a.recordedAt),
-      },
-  );
+  setDemo((demo) => ({
+    ...demo,
+    expenses: [...demo.expenses, expense].sort((a, b) => b.day - a.day || b.recordedAt - a.recordedAt),
+  }));
+  return { ok: true, value: true };
 }
